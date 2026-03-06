@@ -3,7 +3,7 @@ const Database = require("better-sqlite3");
 const cors = require("cors");
 
 const app = express();
-const PORT = 3000; // The port Nginx will proxy to
+const PORT = 3002; // The port Nginx will proxy to
 
 // Middleware to parse incoming JSON requests
 app.use(cors());
