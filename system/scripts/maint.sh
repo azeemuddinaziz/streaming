@@ -1,7 +1,7 @@
 #!/bin/bash
 
 FILE="/var/www/html/maintenance.on"
-HTML_PATH="/var/www/html/Maintenance.html"
+HTML_PATH="/var/www/streaming/system/html/Maintenance.html"
 
 if [ "$1" == "on" ]; then
     # Optional: Update the message if a second argument is provided
