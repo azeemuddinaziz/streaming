@@ -185,16 +185,15 @@
         invite when we go live.
       </p>
 
-      <form
-        onsubmit="
-          event.preventDefault();
-          alert('Subscribed');
-        "
-        class="input-group"
-      >
-        <input type="email" placeholder="Email address" required />
+      <form id="waitlist-form" class="input-group">
+        <input type="email" id="email" placeholder="Email address" required />
         <button type="submit">→</button>
       </form>
+
+      <div
+        id="message"
+        style="font-size: 0.9rem; margin-bottom: 2rem; font-weight: 500"
+      ></div>
 
       <a
         href="https://github.com/azeemuddinaziz/streaming"
@@ -210,5 +209,52 @@
         Follow our progress on GitHub
       </a>
     </section>
+
+    <script>
+      document
+        .getElementById("waitlist-form")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const emailInput = document.getElementById("email");
+          const messageDiv = document.getElementById("message");
+          const submitBtn = this.querySelector("button");
+          const email = emailInput.value;
+
+          // Visual feedback while submitting
+          messageDiv.innerText = "Submitting...";
+          messageDiv.style.color = "var(--text-dim)";
+          submitBtn.disabled = true;
+
+          try {
+            // Pointing to your local Node server for testing
+            const response = await fetch("http://127.0.0.1:3000/api/waitlist", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email: email }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+              messageDiv.innerText = "✓ " + data.message;
+              messageDiv.style.color = "green";
+              emailInput.value = ""; // Clear the input box
+            } else {
+              messageDiv.innerText = "Error: " + data.error;
+              messageDiv.style.color = "red";
+            }
+          } catch (error) {
+            console.error("Fetch error:", error);
+            messageDiv.innerText =
+              "Failed to connect to the server. Is it running?";
+            messageDiv.style.color = "red";
+          } finally {
+            submitBtn.disabled = false; // Re-enable the button
+          }
+        });
+    </script>
   </body>
 </html>
