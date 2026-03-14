@@ -1,29 +1,31 @@
 {
-  "name": "backend",
+  "name": "server",
   "version": "1.0.0",
-  "description": "streaming platform for videos.",
+  "description": "API Service for streamsouk v2",
+  "main": "index.ts",
   "type": "module",
-  "main": "index.js",
+  "author": "Azeemuddin Aziz",
+  "license": "MIT",
   "scripts": {
-    "dev": "nodemon -r dotenv/config --experimental src/index.js"
-  },
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "nodemon": "^3.1.4",
-    "prettier": "^3.3.3"
+    "dev": "tsx --watch src/index.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset"
   },
   "dependencies": {
-    "axios": "^1.13.5",
-    "bcrypt": "^6.0.0",
-    "cloudinary": "^2.7.0",
-    "cookie-parser": "^1.4.6",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.22.1",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5",
-    "mongoose-aggregate-paginate-v2": "^1.1.2",
-    "multer": "^2.1.1"
+    "@dotenvx/dotenvx": "^1.54.1",
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^7.5.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "pg": "^8.20.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/pg": "^8.18.0",
+    "dotenv": "^17.3.1",
+    "prisma": "^7.5.0",
+    "tsx": "^4.21.0",
   }
 }
