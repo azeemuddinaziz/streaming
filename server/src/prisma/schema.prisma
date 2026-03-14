@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+
+  videos Upload[]
+}
+
+model Upload {
+  id          String       @id @default(uuid())
+  publisherId String
+  filename    String
+  s3_key      String?
+  status      UploadStatus @default(PENDING)
+  tus_id      String?
+
+  publisher User @relation(fields: [publisherId], references: [id])
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETED
+  FAILED
+}
