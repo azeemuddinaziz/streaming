@@ -5,9 +5,11 @@ import { checkApiHealth } from "./api-client";
 
 let stub: Server | undefined;
 
-// Starts a stand-in API that answers every request with the given status.
-async function startStubApi(status: number) {
+// Starts a stand-in API that answers every request with the given status,
+// or never answers when no status is given.
+async function startStubApi(status?: number) {
   stub = createServer((_req, res) => {
+    if (status === undefined) return;
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ msg: "stub" }));
   });
@@ -39,5 +41,13 @@ describe("checkApiHealth", () => {
     stub = undefined;
 
     expect(await checkApiHealth(baseUrl)).toEqual({ healthy: false });
+  });
+
+  it("reports unhealthy when the API does not answer in time", async () => {
+    const baseUrl = await startStubApi();
+
+    expect(await checkApiHealth(baseUrl, { timeoutMs: 50 })).toEqual({
+      healthy: false,
+    });
   });
 });
