@@ -1,6 +1,7 @@
 import { HttpError } from "../errors.ts";
 import { violatedUniqueIndex } from "../lib/prisma-errors.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
+import { toAccount } from "../utils/account.ts";
 import { signToken } from "../utils/jwt.ts";
 import { hashPassword, verifyPassword } from "../utils/password.ts";
 
@@ -34,6 +35,12 @@ function validateSignUp(input: unknown) {
   return { email: email.trim().toLowerCase(), name, password };
 }
 
+let standIn: Promise<string> | undefined;
+function standInHash() {
+  standIn ??= hashPassword("stand-in password for unknown emails");
+  return standIn;
+}
+
 export const AuthService = {
   async signUp(input: unknown) {
     const { email, name, password } = validateSignUp(input);
@@ -54,11 +61,7 @@ export const AuthService = {
       throw error;
     });
 
-    return {
-      token: await signToken(user.id),
-      user: { id: user.id, email: user.email, name: user.name },
-      channel: { id: user.channel!.id, name: user.name },
-    };
+    return { token: await signToken(user.id), ...toAccount(user) };
   },
 
   async signIn(input: unknown) {
@@ -70,14 +73,16 @@ export const AuthService = {
     }
 
     const user = await UserRepository.findByEmail(email.trim().toLowerCase());
-    if (!user || !(await verifyPassword(password, user.password))) {
+    // Check against a stand-in hash when the email is unknown, so the reply
+    // takes as long either way and does not reveal which emails have accounts.
+    const passwordMatches = await verifyPassword(
+      password,
+      user?.password ?? (await standInHash()),
+    );
+    if (!user || !passwordMatches) {
       throw invalid;
     }
 
-    return {
-      token: await signToken(user.id),
-      user: { id: user.id, email: user.email, name: user.name },
-      channel: { id: user.channel!.id, name: user.name },
-    };
+    return { token: await signToken(user.id), ...toAccount(user) };
   },
 };

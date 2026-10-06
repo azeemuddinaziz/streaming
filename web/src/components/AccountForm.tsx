@@ -1,14 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { signIn, signUp } from "@/lib/api-client";
 
 export function AccountForm({ mode }: { mode: "sign-up" | "sign-in" }) {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const isSignUp = mode === "sign-up";
+
+  // Move keyboard focus to a refusal from the server so it is not missed.
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,7 +41,7 @@ export function AccountForm({ mode }: { mode: "sign-up" | "sign-in" }) {
   return (
     <form className="form" onSubmit={onSubmit} aria-busy={pending}>
       {error && (
-        <p className="form-error" role="alert">
+        <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
           {error}
         </p>
       )}
@@ -54,8 +60,8 @@ export function AccountForm({ mode }: { mode: "sign-up" | "sign-in" }) {
             aria-describedby="name-hint"
           />
           <p className="hint" id="name-hint">
-            Letters, digits and hyphens, 3 to 30 characters. It names your
-            channel and cannot be changed later.
+            3 to 30 letters and digits, with single hyphens between them. It
+            names your channel and cannot be changed later.
           </p>
         </div>
       )}

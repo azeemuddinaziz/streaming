@@ -166,6 +166,14 @@ describe("current user", () => {
     expect(await response.json()).toEqual(expectedBody());
   });
 
+  it("accepts the Bearer scheme in any case", async () => {
+    const response = await api.request("/users/me", {
+      headers: { Authorization: `bearer ${token}` },
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   it("rejects a request with no token", async () => {
     const response = await api.request("/users/me");
 

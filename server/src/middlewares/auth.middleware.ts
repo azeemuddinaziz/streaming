@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { UserRepository } from "../repositories/users.repository.ts";
+import { toAccount } from "../utils/account.ts";
 import { setTokenCookie, TOKEN_COOKIE } from "../utils/cookie.ts";
 import {
   signToken,
@@ -10,9 +11,9 @@ import {
 // The token comes from an "Authorization: Bearer <token>" header (used by the
 // upload server) or, for the web app, the sign-in cookie.
 function readToken(req: Request) {
-  const header = req.headers.authorization;
-  if (header?.startsWith("Bearer ")) {
-    return { token: header.slice("Bearer ".length), fromCookie: false };
+  const bearer = /^Bearer (.+)$/i.exec(req.headers.authorization ?? "");
+  if (bearer) {
+    return { token: bearer[1]!, fromCookie: false };
   }
 
   const cookie = req.cookies?.[TOKEN_COOKIE];
@@ -45,8 +46,9 @@ export class AuthenticationMiddleware {
       setTokenCookie(res, await signToken(user.id));
     }
 
-    req.user = { id: user.id, email: user.email, name: user.name };
-    req.channel = { id: user.channel.id, name: user.name };
+    const account = toAccount(user);
+    req.user = account.user;
+    req.channel = account.channel;
     next();
   };
 }
