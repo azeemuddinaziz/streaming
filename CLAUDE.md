@@ -13,7 +13,11 @@ StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was 
 - `pnpm generate` — `prisma generate` (client output goes to `server/generated/prisma`)
 - `pnpm migrate` — `prisma migrate dev`
 - `pnpm studio` — Prisma Studio
-- No test or lint scripts exist yet (`pnpm test` is a placeholder). Type-check with `pnpm exec tsc` (`noEmit` is set).
+- `pnpm test` — run the Vitest suite once; `pnpm test:watch` for watch mode; `pnpm exec vitest run src/createApp.test.ts` for a single file
+- `pnpm typecheck` — `tsc` with `noEmit`
+- There is no lint script yet.
+
+Tests live beside the code as `*.test.ts` and exercise the API over real HTTP: `createApp()` (in `src/createApp.ts`) builds the Express app without listening, so a test starts it on port 0. `src/app.ts` is only the entry point that loads env and listens.
 
 Setup: copy `.env.example` to `.env` and set `DATABASE_URL`.
 
