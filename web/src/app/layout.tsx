@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
 const display = Instrument_Serif({
@@ -28,13 +29,7 @@ export default function RootLayout({
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <header className="site-header">
-          <div className="page">
-            <a className="brand" href="/">
-              StreamSouk
-            </a>
-          </div>
-        </header>
+        <SiteHeader />
         <main id="main" className="page">
           {children}
         </main>

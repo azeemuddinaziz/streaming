@@ -13,8 +13,18 @@ datasource db {
 }
 
 model User {
-  id       String  @id @default(uuid())
-  email    String  @unique
-  name     String?
+  id       String   @id @default(uuid())
+  email    String   @unique
+  // The account name as the person typed it. Shown as-is and used to name their Channel.
+  name     String
+  // Lowercased name, so account names are unique regardless of case.
+  nameKey  String   @unique
   password String
+  channel  Channel?
+}
+
+model Channel {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 }

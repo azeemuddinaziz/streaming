@@ -21,7 +21,7 @@ StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was 
 
 Tests live beside the code as `*.test.ts` and exercise the API over real HTTP: `createApp()` (in `src/createApp.ts`) builds the Express app without listening, so a test starts it on port 0. `src/app.ts` is only the entry point that loads env and listens.
 
-Setup: copy `.env.example` to `.env` and set `DATABASE_URL`.
+Setup: copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET` and `WEB_ORIGIN`. Tests also need `TEST_DATABASE_URL`, a separate Postgres database that the suite wipes; `vitest.config.ts` refuses to run if it is missing or equals `DATABASE_URL`. Apply migrations to it with `DATABASE_URL=<test url> pnpm exec prisma migrate deploy`. Tests in `src/routes/` run the API over real HTTP against that database (`src/test/helpers.ts`).
 
 ### web (run from `web/`)
 
@@ -38,7 +38,9 @@ Layered structure under `server/src`: `routes/` → `controllers/` → `services
 Video uploads are not handled by Express. A separate `tusd` process receives the tus uploads and calls back into `POST /api/v1/webhooks/tusd` (`WebhooksController.tusd`), which dispatches on the hook `Type` (`pre-create`, `post-finish`, etc.) to `TusdService`. Responses must follow tusd's hook protocol: always HTTP 200, and rejecting an upload is done with `{ RejectUpload: true, HTTPResponse: {...} }` in the body, not a non-2xx status. Hook payload types are in `src/types/tusd.types.ts`. `preCreate` auth is currently a placeholder (compares the Authorization header to a literal) with TODOs to use real JWT verification; `postFinish` only logs.
 
 ### Auth
-`AuthenticationMiddleware.verifyToken` reads the token from the `Authorization` header or a `token` cookie and currently just assigns it to `req.user` (no verification). `req.user` is typed in `src/@types/express/index.d.ts`. Known bug: it uses `res.send(401).json(...)` instead of `res.status(401).json(...)`.
+The API signs people in with a JWT (`jose`, HS256, signed with `JWT_SECRET`). Sign-up and sign-in set it as an `httpOnly`, `SameSite=Lax` `token` cookie (optionally on `COOKIE_DOMAIN` so a web app and API on sibling subdomains share it) valid for 30 days. `AuthenticationMiddleware.verifyToken` accepts the cookie or an `Authorization: Bearer <token>` header (meant for the upload server), loads the User from the database, sets `req.user` and `req.channel`, and swaps a cookie older than a day for a fresh one, so active people stay signed in. There is no revoke; sign-out only clears the cookie. Passwords are hashed with Node's built-in scrypt. CORS allows exactly `WEB_ORIGIN`, with credentials. Routes: `POST /users/sign-up`, `/users/sign-in`, `/users/sign-out`, `GET /users/me`.
+
+Account rules live in `AuthService`: the account name is 3 to 30 characters of letters, digits and hyphens, unique regardless of case (`User.nameKey` holds the lowercased copy), and a Channel is created in the same transaction as its User. A Channel has no name column; it is named after its User. The tusd `pre-create` hook in `TusdService` still compares the header to a literal and does not use this auth yet.
 
 ### Prisma 7 specifics
 - Generated client lives in `server/generated/prisma` (gitignored, so run `pnpm generate` after cloning and after schema changes).
@@ -51,7 +53,7 @@ ESM (`"type": "module"`), run directly by `tsx` with no build step. Relative imp
 
 ## Web app
 
-Pages are server components that call the API through `src/lib/api-client.ts` (server-side, so no CORS setup is needed). Styling uses the semantic CSS variables defined once in `src/app/globals.css`; never write raw colors in components. Imports are extensionless (bundler resolution), unlike the server. Tests exercise the API client over real HTTP against a stub server; there are no component tests yet.
+Server components call the API through `src/lib/api-client.ts` and forward the browser's cookie; the sign-up and sign-in forms are client components that call the API directly with `credentials: "include"` (hence the CORS allow-list). `API_URL` is the server-side address and `NEXT_PUBLIC_API_URL` the browser's. The header reads the `token` cookie to show who is signed in, so every page renders dynamically. Styling uses the semantic CSS variables defined once in `src/app/globals.css`; never write raw colors in components. Imports are extensionless (bundler resolution), unlike the server. Tests exercise the API client over real HTTP against a stub server; there are no component tests yet.
 
 ## Git workflow
 
