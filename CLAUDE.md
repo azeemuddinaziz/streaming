@@ -13,13 +13,17 @@ StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was 
 - `pnpm generate` — `prisma generate` (client output goes to `server/generated/prisma`)
 - `pnpm migrate` — `prisma migrate dev`
 - `pnpm studio` — Prisma Studio
-- No test or lint scripts exist yet (`pnpm test` is a placeholder). Type-check with `pnpm exec tsc` (`noEmit` is set).
+- `pnpm test` — run the Vitest suite once; `pnpm test:watch` for watch mode; `pnpm exec vitest run src/createApp.test.ts` for a single file
+- `pnpm typecheck` — `tsc` with `noEmit`
+- There is no lint script yet.
+
+Tests live beside the code as `*.test.ts` and exercise the API over real HTTP: `createApp()` (in `src/createApp.ts`) builds the Express app without listening, so a test starts it on port 0. `src/app.ts` is only the entry point that loads env and listens.
 
 Setup: copy `.env.example` to `.env` and set `DATABASE_URL`.
 
 ## Architecture
 
-Layered structure under `server/src`: `routes/` → `controllers/` → `services/` → `repositories/` → `lib/prisma.ts`. All routes are mounted under `/api/v1` in `src/app.ts` (`/videos`, `/users`, `/webhooks`). Much of this is still scaffolding: several controllers return stub `{ msg: "Success" }`, and `auth.service.ts`, `utils/jwt.ts` are empty.
+Layered structure under `server/src`: `routes/` → `controllers/` → `services/` → `repositories/` → `lib/prisma.ts`. All routes are mounted under `/api/v1` in `src/createApp.ts` (`/videos`, `/users`, `/webhooks`). Much of this is still scaffolding: several controllers return stub `{ msg: "Success" }`, and `auth.service.ts`, `utils/jwt.ts` are empty.
 
 ### Resumable uploads via tusd
 Video uploads are not handled by Express. A separate `tusd` process receives the tus uploads and calls back into `POST /api/v1/webhooks/tusd` (`WebhooksController.tusd`), which dispatches on the hook `Type` (`pre-create`, `post-finish`, etc.) to `TusdService`. Responses must follow tusd's hook protocol: always HTTP 200, and rejecting an upload is done with `{ RejectUpload: true, HTTPResponse: {...} }` in the body, not a non-2xx status. Hook payload types are in `src/types/tusd.types.ts`. `preCreate` auth is currently a placeholder (compares the Authorization header to a literal) with TODOs to use real JWT verification; `postFinish` only logs.
