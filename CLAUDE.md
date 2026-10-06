@@ -38,7 +38,7 @@ ESM (`"type": "module"`), run directly by `tsx` with no build step. Relative imp
 
 ## Git workflow
 
-Never commit directly to `setup-v2`. Do the work on a feature branch, then merge it into `setup-v2`.
+`v2` is the default branch. Work flows: ticket (GitHub issue) → feature branch from `v2` → implement → code review → pull request → merge into `v2`. Never commit directly to `v2`.
 
 ## Agent skills
 
