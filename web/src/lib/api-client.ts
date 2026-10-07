@@ -110,18 +110,27 @@ export async function getCurrentUser(
   }
 }
 
-// What the studio needs: the Videos, or why there are none to show.
-export type StudioResult =
-  | { ok: true; videos: StudioVideo[] }
+export type UnfinishedUpload = {
+  id: string;
+  filename: string;
+  size: number;
+  createdAt: string;
+};
+
+// What a signed-in list needs: the items, or why there are none to show.
+export type ListResult<T> =
+  | { ok: true; items: T[] }
   | { ok: false; reason: "signed-out" | "unavailable" };
 
-// For server components: the signed-in person's own Videos.
-export async function getStudioVideos(
+// For server components: reads a list that belongs to the request's cookie.
+async function getOwnList<T>(
+  path: string,
+  key: string,
   cookie: string,
-  baseUrl: string = getApiBaseUrl(),
-): Promise<StudioResult> {
+  baseUrl: string,
+): Promise<ListResult<T>> {
   try {
-    const response = await fetch(`${baseUrl}/api/v1/videos/mine`, {
+    const response = await fetch(`${baseUrl}/api/v1/${path}`, {
       headers: { Cookie: cookie },
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
@@ -129,9 +138,17 @@ export async function getStudioVideos(
     if (response.status === 401) return { ok: false, reason: "signed-out" };
     if (!response.ok) return { ok: false, reason: "unavailable" };
 
-    const { videos } = await response.json();
-    return { ok: true, videos };
+    const body = await response.json();
+    return { ok: true, items: body[key] };
   } catch {
     return { ok: false, reason: "unavailable" };
   }
+}
+
+export function getStudioVideos(cookie: string, baseUrl: string = getApiBaseUrl()) {
+  return getOwnList<StudioVideo>("videos/mine", "videos", cookie, baseUrl);
+}
+
+export function getUnfinishedUploads(cookie: string, baseUrl: string = getApiBaseUrl()) {
+  return getOwnList<UnfinishedUpload>("uploads/unfinished", "uploads", cookie, baseUrl);
 }

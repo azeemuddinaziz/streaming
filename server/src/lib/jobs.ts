@@ -4,6 +4,11 @@ export type JobState = "created" | "retry" | "active" | "completed" | "cancelled
 
 type JobHandler = (data: any) => Promise<void>;
 
+type JobOptions = {
+  // A cron expression (UTC). The worker queues the job whenever it comes due.
+  schedule?: string;
+};
+
 type JobRunnerOptions = {
   // How many times a failing job is run again before it is recorded as failed.
   retryLimit?: number;
@@ -21,7 +26,7 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
 
   const boss = new PgBoss(connectionString);
-  const handlers = new Map<string, JobHandler>();
+  const handlers = new Map<string, { handler: JobHandler; schedule?: string }>();
   const queues = new Set<string>();
 
   // Queues must exist before a job is sent or worked. Creating one that exists
@@ -36,20 +41,22 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
 
   return {
     // Declares a job name and the function that runs it. Call before start().
-    register(name: string, handler: JobHandler) {
-      handlers.set(name, handler);
+    register(name: string, handler: JobHandler, { schedule }: JobOptions = {}) {
+      handlers.set(name, { handler, schedule });
     },
 
     // Connects to the database. Workers start processing registered jobs;
     // pass { work: false } to only enqueue and read status (the API does this).
     async start({ work = true }: { work?: boolean } = {}) {
       await boss.start();
-      for (const [name, handler] of handlers) {
+      for (const [name, { handler, schedule }] of handlers) {
         await ensureQueue(name);
         if (work) {
           await boss.work<object>(name, async ([job]) => {
             await handler(job.data);
           });
+          // Stored in the database, so starting the worker again updates it.
+          if (schedule) await boss.schedule(name, schedule);
         }
       }
     },

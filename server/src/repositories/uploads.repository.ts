@@ -26,7 +26,7 @@ export class UploadRepository {
   static async completeIntoVideo(tusId: string) {
     return await prisma.$transaction(async (tx) => {
       const claimed = await tx.upload.updateMany({
-        where: { tusId, completedAt: null },
+        where: { tusId, completedAt: null, abandonedAt: null },
         data: { completedAt: new Date() },
       });
       if (claimed.count === 0) return undefined;
@@ -41,6 +41,45 @@ export class UploadRepository {
         data: { videoId: video.id },
       });
       return video;
+    });
+  }
+
+  // Unfinished Uploads of one User that were started after `since`.
+  static async listUnfinishedForUser(userId: string, since: Date) {
+    return await prisma.upload.findMany({
+      where: {
+        userId,
+        completedAt: null,
+        abandonedAt: null,
+        createdAt: { gt: since },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  // Unfinished Uploads started before `before`, whose bytes are still stored.
+  static async findUnfinishedBefore(before: Date) {
+    return await prisma.upload.findMany({
+      where: { completedAt: null, abandonedAt: null, createdAt: { lt: before } },
+    });
+  }
+
+  // Takes an Upload for discarding, unless it has been completed or taken
+  // already. Once taken it can no longer be completed into a Video, so its
+  // bytes are safe to remove. Returns whether this caller got it.
+  static async claimForDiscard(id: string) {
+    const claimed = await prisma.upload.updateMany({
+      where: { id, completedAt: null, abandonedAt: null },
+      data: { abandonedAt: new Date() },
+    });
+    return claimed.count === 1;
+  }
+
+  // Gives back an Upload taken for discarding whose bytes could not be removed.
+  static async releaseDiscardClaim(id: string) {
+    await prisma.upload.updateMany({
+      where: { id, completedAt: null },
+      data: { abandonedAt: null },
     });
   }
 }
