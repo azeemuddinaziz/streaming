@@ -21,6 +21,7 @@ fi
 exec tusd \
   -hooks-http "http://localhost:$PORT_API/api/v1/webhooks/tusd" \
   -hooks-http-forward-headers Authorization,Cookie \
+  -hooks-enabled-events pre-create,post-create,post-receive,pre-finish,post-finish,post-terminate \
   -cors-allow-origin "$ORIGIN_PATTERN" \
   -cors-allow-credentials \
   $STORAGE

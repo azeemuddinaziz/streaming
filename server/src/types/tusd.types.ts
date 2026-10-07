@@ -35,10 +35,12 @@ export type TusHookName =
   | "pre-create"
   | "post-create"
   | "post-receive"
+  | "pre-finish"
   | "post-finish"
   | "post-terminate";
 
-export type PreCreateResult =
+// A hook's answer: let the upload go ahead, or refuse it with an HTTP status.
+export type HookDecision =
   | { allowed: true }
   | { allowed: false; status: number; reason: string };
 

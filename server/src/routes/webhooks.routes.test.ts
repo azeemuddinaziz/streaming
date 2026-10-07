@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../lib/prisma.ts";
+import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase, startTestApi } from "../test/helpers.ts";
 import { signToken } from "../utils/jwt.ts";
@@ -18,11 +19,11 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-async function signedUp() {
+async function signedUp(name = "Ada-Lovelace") {
   const user = await UserRepository.createWithChannel({
-    email: "ada@example.com",
-    name: "Ada-Lovelace",
-    nameKey: "ada-lovelace",
+    email: `${name.toLowerCase()}@example.com`,
+    name,
+    nameKey: name.toLowerCase(),
     password: "unused",
   });
   return { user, token: await signToken(user.id) };
@@ -30,7 +31,7 @@ async function signedUp() {
 
 // The body tusd posts to its HTTP hook.
 function hook(
-  type: "pre-create" | "post-create",
+  type: "pre-create" | "post-create" | "pre-finish" | "post-finish",
   { headers = {}, id = "", filename = "holiday.mp4", deferred = false } = {},
 ) {
   return {
@@ -188,5 +189,118 @@ describe("tusd post-create hook", () => {
     await api.request("/webhooks/tusd", { method: "POST", json: body });
 
     expect(await prisma.upload.count()).toBe(1);
+  });
+});
+
+async function startedUpload(userId: string, tusId = "abc123") {
+  return UploadRepository.record({ tusId, userId, filename: "holiday.mp4", size: 1048576 });
+}
+
+describe("tusd pre-finish hook", () => {
+  it("lets the Upload's owner finish it", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    const response = await api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("pre-finish", { id: "abc123", headers: { Authorization: [`Bearer ${token}`] } }),
+    });
+
+    expect(await response.json()).toEqual({});
+  });
+
+  it("rejects completion by a User who does not own the Upload", async () => {
+    const owner = await signedUp("Ada-Lovelace");
+    const other = await signedUp("Grace-Hopper");
+    await startedUpload(owner.user.id);
+
+    const response = await api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("pre-finish", { id: "abc123", headers: { Authorization: [`Bearer ${other.token}`] } }),
+    });
+
+    const body = await response.json();
+    expect(body.RejectUpload).toBe(true);
+    expect(body.HTTPResponse.StatusCode).toBe(403);
+  });
+
+  it("rejects completion with no valid token, and for an Upload nobody recorded", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    const noToken = await api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("pre-finish", { id: "abc123" }),
+    });
+    expect((await noToken.json()).HTTPResponse.StatusCode).toBe(401);
+
+    const unknown = await api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("pre-finish", { id: "nope", headers: { Authorization: [`Bearer ${token}`] } }),
+    });
+    expect((await unknown.json()).RejectUpload).toBe(true);
+  });
+});
+
+describe("tusd post-finish hook", () => {
+  // tusd sends post-finish with the headers of the request that finished the upload.
+  async function finish(token?: string, tusId = "abc123") {
+    return api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("post-finish", {
+        id: tusId,
+        headers: token ? { Authorization: [`Bearer ${token}`] } : {},
+      }),
+    });
+  }
+
+  it("completes the Upload into one private, processing Video on the owner's Channel", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    expect((await finish(token)).status).toBe(200);
+
+    const upload = await prisma.upload.findUniqueOrThrow({
+      where: { tusId: "abc123" },
+      include: { video: true },
+    });
+    expect(upload.completedAt).not.toBeNull();
+    expect(upload.video).toEqual(
+      expect.objectContaining({ status: "PROCESSING", visibility: "PRIVATE" }),
+    );
+    const channel = await prisma.channel.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(upload.video!.channelId).toBe(channel.id);
+  });
+
+  it("makes exactly one Video however many times tusd sends the hook", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    await Promise.all([finish(token), finish(token), finish(token)]);
+    await finish(token);
+
+    expect(await prisma.video.count()).toBe(1);
+  });
+
+  it("makes no Video for an Upload nobody recorded", async () => {
+    const { token } = await signedUp();
+
+    expect((await finish(token, "nope")).status).toBe(200);
+    expect(await prisma.video.count()).toBe(0);
+  });
+
+  // tusd still sends post-finish after pre-finish refused the request, so this
+  // hook has to check the owner itself.
+  it("makes no Video when someone other than the owner finished the Upload", async () => {
+    const owner = await signedUp("Ada-Lovelace");
+    const other = await signedUp("Grace-Hopper");
+    await startedUpload(owner.user.id);
+
+    await finish(other.token);
+    await finish();
+
+    expect(await prisma.video.count()).toBe(0);
+    const upload = await prisma.upload.findUniqueOrThrow({ where: { tusId: "abc123" } });
+    expect(upload.completedAt).toBeNull();
   });
 });

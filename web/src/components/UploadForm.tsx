@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Upload } from "tus-js-client";
 
@@ -87,7 +88,7 @@ export function UploadForm() {
 
       {status.state === "done" && (
         <p className="hint" role="status">
-          Upload complete.
+          Upload complete. <Link href="/studio">See it in your studio</Link>.
         </p>
       )}
 

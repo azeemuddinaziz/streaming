@@ -9,6 +9,15 @@ export type AccountResult =
   | ({ ok: true } & Account)
   | { ok: false; message: string };
 
+export type StudioVideo = {
+  id: string;
+  // The filename, until the Video has a title.
+  label: string;
+  status: "PROCESSING" | "READY" | "FAILED";
+  visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
+  createdAt: string;
+};
+
 const DEFAULT_TIMEOUT_MS = 3000;
 const UNREACHABLE = "Could not reach the server. Try again in a moment.";
 
@@ -98,5 +107,31 @@ export async function getCurrentUser(
     return { user, channel };
   } catch {
     return null;
+  }
+}
+
+// What the studio needs: the Videos, or why there are none to show.
+export type StudioResult =
+  | { ok: true; videos: StudioVideo[] }
+  | { ok: false; reason: "signed-out" | "unavailable" };
+
+// For server components: the signed-in person's own Videos.
+export async function getStudioVideos(
+  cookie: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<StudioResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/mine`, {
+      headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 401) return { ok: false, reason: "signed-out" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    const { videos } = await response.json();
+    return { ok: true, videos };
+  } catch {
+    return { ok: false, reason: "unavailable" };
   }
 }

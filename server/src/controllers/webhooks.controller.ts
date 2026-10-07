@@ -1,6 +1,19 @@
 import type { Request, Response } from "express";
 import { TusdService } from "../services/tusd.services.ts";
-import type { TusHookBody, TusHookName } from "../types/tusd.types.ts";
+import type { HookDecision, TusHookBody, TusHookName } from "../types/tusd.types.ts";
+
+// Always HTTP 200; refusing an upload is part of the body (see tusd's hook protocol).
+function respond(res: Response, decision: HookDecision) {
+  if (decision.allowed) return res.status(200).json({});
+
+  return res.status(200).json({
+    RejectUpload: true,
+    HTTPResponse: {
+      StatusCode: decision.status,
+      Body: JSON.stringify({ message: decision.reason }),
+    },
+  });
+}
 
 export const WebhooksController = {
   async tusd(req: Request, res: Response) {
@@ -11,24 +24,14 @@ export const WebhooksController = {
       Type || (req.header("Hook-Name") as TusHookName | undefined);
 
     switch (hookName) {
-      case "pre-create": {
-        const result = await TusdService.preCreate(Upload, HTTPRequest);
+      case "pre-create":
+        return respond(res, await TusdService.preCreate(Upload, HTTPRequest));
 
-        if (!result.allowed) {
-          return res.status(200).json({
-            RejectUpload: true,
-            HTTPResponse: {
-              StatusCode: result.status,
-              Body: JSON.stringify({ message: result.reason }),
-            },
-          });
-        }
-
-        return res.status(200).json({});
-      }
+      case "pre-finish":
+        return respond(res, await TusdService.preFinish(Upload, HTTPRequest));
 
       case "post-finish": {
-        await TusdService.postFinish(Upload);
+        await TusdService.postFinish(Upload, HTTPRequest);
         return res.status(200).json({});
       }
 
