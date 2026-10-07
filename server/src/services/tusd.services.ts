@@ -35,6 +35,10 @@ export const TusdService = {
       return { allowed: false, status: 400, reason: "The upload has no filename." };
     }
 
+    if (upload.SizeIsDeferred) {
+      return { allowed: false, status: 400, reason: "The upload has no size." };
+    }
+
     return { allowed: true };
   },
 

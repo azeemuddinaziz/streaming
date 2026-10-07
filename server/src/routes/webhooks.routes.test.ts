@@ -31,15 +31,15 @@ async function signedUp() {
 // The body tusd posts to its HTTP hook.
 function hook(
   type: "pre-create" | "post-create",
-  { headers = {}, id = "", filename = "holiday.mp4" } = {},
+  { headers = {}, id = "", filename = "holiday.mp4", deferred = false } = {},
 ) {
   return {
     Type: type,
     Event: {
       Upload: {
         ID: id,
-        Size: 1048576,
-        SizeIsDeferred: false,
+        Size: deferred ? 0 : 1048576,
+        SizeIsDeferred: deferred,
         Offset: 0,
         MetaData: filename ? { filename } : {},
         IsPartial: false,
@@ -116,6 +116,24 @@ describe("tusd pre-create hook", () => {
       json: hook("pre-create", {
         headers: { Authorization: [`Bearer ${token}`] },
         filename: "",
+      }),
+    });
+
+    const body = await response.json();
+    expect(body.RejectUpload).toBe(true);
+    expect(body.HTTPResponse.StatusCode).toBe(400);
+  });
+});
+
+describe("tusd pre-create hook, size", () => {
+  it("rejects an upload that does not say how big it is", async () => {
+    const { token } = await signedUp();
+
+    const response = await api.request("/webhooks/tusd", {
+      method: "POST",
+      json: hook("pre-create", {
+        headers: { Authorization: [`Bearer ${token}`] },
+        deferred: true,
       }),
     });
 

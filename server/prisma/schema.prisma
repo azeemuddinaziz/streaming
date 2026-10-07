@@ -33,7 +33,8 @@ model Channel {
 // One resumable transfer of a video file, owned by the User who started it.
 model Upload {
   id        String   @id @default(uuid())
-  // The id tusd gives the upload; it is also the key of its bytes in S3.
+  // The id tusd gives the upload. With the S3 store it carries the object key
+  // followed by a "+" and the multipart upload id, so take the key from before the "+".
   tusId     String   @unique
   userId    String
   user      User     @relation(fields: [userId], references: [id])
