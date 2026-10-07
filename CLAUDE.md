@@ -12,6 +12,7 @@ StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was 
 
 - `pnpm dev` — run the API with `tsx watch src/app.ts` (default port 3000, `PORT` env overrides)
 - `pnpm tusd` — run the `tusd` upload server, pointing its hooks at `http://localhost:3000/api/v1/webhooks/tusd` (requires the `tusd` binary installed locally)
+- `pnpm worker` — run the background job worker (`tsx watch src/worker.ts`), a separate process from the API
 - `pnpm generate` — `prisma generate` (client output goes to `server/generated/prisma`)
 - `pnpm migrate` — `prisma migrate dev`
 - `pnpm studio` — Prisma Studio
@@ -36,6 +37,9 @@ Layered structure under `server/src`: `routes/` → `controllers/` → `services
 
 ### Resumable uploads via tusd
 Video uploads are not handled by Express. A separate `tusd` process receives the tus uploads and calls back into `POST /api/v1/webhooks/tusd` (`WebhooksController.tusd`), which dispatches on the hook `Type` (`pre-create`, `post-finish`, etc.) to `TusdService`. Responses must follow tusd's hook protocol: always HTTP 200, and rejecting an upload is done with `{ RejectUpload: true, HTTPResponse: {...} }` in the body, not a non-2xx status. Hook payload types are in `src/types/tusd.types.ts`. `preCreate` auth is currently a placeholder (compares the Authorization header to a literal) with TODOs to use real JWT verification; `postFinish` only logs.
+
+### Background jobs
+Work outside the request cycle goes through `createJobRunner()` in `src/lib/jobs.ts`, a thin wrapper over pg-boss that queues jobs in the app's own Postgres (a `pgboss` schema it creates itself, no extra infrastructure). The API process calls `start({ work: false })` and `enqueue(name, data)`; the worker process (`src/worker.ts`) calls `start()`, which runs the handlers registered in `src/jobs/index.ts`. A failing job is retried `retryLimit` times (default 3) with backoff, then ends in the `failed` state, readable with `status(name, id)`. Register new jobs in `src/jobs/index.ts`.
 
 ### Auth
 The API signs people in with a JWT (`jose`, HS256, signed with `JWT_SECRET`). Sign-up and sign-in set it as an `httpOnly`, `SameSite=Lax` `token` cookie (optionally on `COOKIE_DOMAIN` so a web app and API on sibling subdomains share it; `Secure` is set only when `NODE_ENV=production`) valid for 30 days. `AuthenticationMiddleware.verifyToken` accepts the cookie or an `Authorization: Bearer <token>` header (meant for the upload server), loads the User from the database, sets `req.user` and `req.channel`, and swaps a cookie older than a day for a fresh one, so active people stay signed in. There is no revoke; sign-out only clears the cookie. Passwords are hashed with Node's built-in scrypt. CORS allows exactly `WEB_ORIGIN`, with credentials. Routes: `POST /users/sign-up`, `/users/sign-in`, `/users/sign-out`, `GET /users/me`.

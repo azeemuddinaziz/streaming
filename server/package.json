@@ -5,6 +5,7 @@
   "main": "app.ts",
   "scripts": {
     "dev": "tsx watch src/app.ts",
+    "worker": "tsx watch src/worker.ts",
     "tusd": "tusd -hooks-http http://localhost:3000/api/v1/webhooks/tusd",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
@@ -34,7 +35,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jose": "^6.2.12",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "pg-boss": "^12.37.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
