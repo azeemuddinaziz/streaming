@@ -1,26 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { toAccount } from "../utils/account.ts";
-import { setTokenCookie, TOKEN_COOKIE } from "../utils/cookie.ts";
+import { setTokenCookie } from "../utils/cookie.ts";
 import {
   signToken,
   TOKEN_RENEW_AFTER_SECONDS,
   verifyToken,
 } from "../utils/jwt.ts";
-
-// The token comes from an "Authorization: Bearer <token>" header (used by the
-// upload server) or, for the web app, the sign-in cookie.
-function readToken(req: Request) {
-  const bearer = /^Bearer (.+)$/i.exec(req.headers.authorization ?? "");
-  if (bearer) {
-    return { token: bearer[1]!, fromCookie: false };
-  }
-
-  const cookie = req.cookies?.[TOKEN_COOKIE];
-  return typeof cookie === "string"
-    ? { token: cookie, fromCookie: true }
-    : undefined;
-}
+import { pickToken } from "../utils/request-token.ts";
 
 export class AuthenticationMiddleware {
   static verifyToken = async (
@@ -31,7 +18,7 @@ export class AuthenticationMiddleware {
     const unauthenticated = () =>
       res.status(401).json({ msg: "User not Authenticated." });
 
-    const found = readToken(req);
+    const found = pickToken(req.headers.authorization, req.headers.cookie);
     if (!found) return unauthenticated();
 
     const verified = await verifyToken(found.token);

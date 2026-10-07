@@ -38,10 +38,9 @@ export type TusHookName =
   | "post-finish"
   | "post-terminate";
 
-export interface PreCreateResult {
-  allowed: boolean;
-  reason?: string;
-}
+export type PreCreateResult =
+  | { allowed: true }
+  | { allowed: false; status: number; reason: string };
 
 export interface PostFinishResult {
   success: boolean;

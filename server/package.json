@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "worker": "tsx watch src/worker.ts",
-    "tusd": "tusd -hooks-http http://localhost:3000/api/v1/webhooks/tusd",
+    "tusd": "sh scripts/tusd.sh",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "studio": "prisma studio",
