@@ -33,7 +33,7 @@ Setup: copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET` and `W
 
 ## Architecture
 
-Layered structure under `server/src`: `routes/` → `controllers/` → `services/` → `repositories/` → `lib/prisma.ts`. All routes are mounted under `/api/v1` in `src/createApp.ts` (`/videos`, `/users`, `/webhooks`). Auth is implemented (see below); the videos controller is still a scaffold returning stub `{ msg: "Success" }`.
+Layered structure under `server/src`: `routes/` → `controllers/` → `services/` → `repositories/` → `lib/prisma.ts`. All routes are mounted under `/api/v1` in `src/createApp.ts` (`/videos`, `/users`, `/webhooks`). Auth is implemented (see below); the videos controller has `GET /videos/mine` (the studio list), and its other handlers are still stubs returning `{ msg: "Success" }`.
 
 ### Resumable uploads via tusd
 Video uploads are not handled by Express. The browser uploads straight to a separate `tusd` process (`pnpm tusd`, which runs `server/scripts/tusd.sh`: it reads `server/.env`, forwards the `Authorization` and `Cookie` headers to the hooks, allows only `WEB_ORIGIN` with credentials, and stores bytes in S3 when `S3_BUCKET` is set, otherwise in `server/data/uploads`). tusd calls back into `POST /api/v1/webhooks/tusd` (`WebhooksController.tusd`), which dispatches on the hook `Type` to `TusdService`. Responses must follow tusd's hook protocol: always HTTP 200, and rejecting an upload is done with `{ RejectUpload: true, HTTPResponse: {...} }` in the body, not a non-2xx status. Hook payload types are in `src/types/tusd.types.ts`.

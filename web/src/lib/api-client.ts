@@ -110,23 +110,28 @@ export async function getCurrentUser(
   }
 }
 
-// For server components: the signed-in person's own Videos, or null if the
-// request's cookie is not signed in or the API cannot be reached.
+// What the studio needs: the Videos, or why there are none to show.
+export type StudioResult =
+  | { ok: true; videos: StudioVideo[] }
+  | { ok: false; reason: "signed-out" | "unavailable" };
+
+// For server components: the signed-in person's own Videos.
 export async function getStudioVideos(
   cookie: string,
   baseUrl: string = getApiBaseUrl(),
-): Promise<StudioVideo[] | null> {
+): Promise<StudioResult> {
   try {
     const response = await fetch(`${baseUrl}/api/v1/videos/mine`, {
       headers: { Cookie: cookie },
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
-    if (!response.ok) return null;
+    if (response.status === 401) return { ok: false, reason: "signed-out" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
 
     const { videos } = await response.json();
-    return videos;
+    return { ok: true, videos };
   } catch {
-    return null;
+    return { ok: false, reason: "unavailable" };
   }
 }

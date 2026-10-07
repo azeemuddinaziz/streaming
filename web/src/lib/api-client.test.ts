@@ -202,7 +202,7 @@ describe("getStudioVideos", () => {
   it("passes the cookie on and returns the person's Videos", async () => {
     const { baseUrl, requests } = await startRecordingApi(200, { videos });
 
-    expect(await getStudioVideos("token=abc", baseUrl)).toEqual(videos);
+    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: true, videos });
     expect(requests[0]!.headers.cookie).toBe("token=abc");
     expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/videos/mine" });
   });
@@ -210,6 +210,15 @@ describe("getStudioVideos", () => {
   it("returns nothing when nobody is signed in", async () => {
     const { baseUrl } = await startRecordingApi(401, { msg: "User not Authenticated." });
 
-    expect(await getStudioVideos("", baseUrl)).toBeNull();
+    expect(await getStudioVideos("", baseUrl)).toEqual({ ok: false, reason: "signed-out" });
+  });
+
+  it("says the studio is unavailable, not signed out, when the API fails", async () => {
+    const { baseUrl } = await startRecordingApi(500, { msg: "Something went wrong." });
+    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: false, reason: "unavailable" });
+
+    await new Promise((resolve) => stub!.close(resolve));
+    stub = undefined;
+    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: false, reason: "unavailable" });
   });
 });

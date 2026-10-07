@@ -21,10 +21,10 @@ const VISIBILITY_LABEL = {
 
 export default async function StudioPage() {
   const cookieStore = await cookies();
-  const videos = cookieStore.has("token")
+  const result = cookieStore.has("token")
     ? await getStudioVideos(cookieStore.toString())
-    : null;
-  if (!videos) redirect("/sign-in");
+    : ({ ok: false, reason: "signed-out" } as const);
+  if (!result.ok && result.reason === "signed-out") redirect("/sign-in");
 
   return (
     <section className="studio">
@@ -33,14 +33,18 @@ export default async function StudioPage() {
         Your <em>videos</em>
       </h1>
 
-      {videos.length === 0 ? (
+      {!result.ok ? (
+        <p role="alert">
+          Your videos could not be loaded right now. Try again in a moment.
+        </p>
+      ) : result.videos.length === 0 ? (
         <p>
           Nothing here yet. <Link href="/upload">Upload a video</Link> to get
           started.
         </p>
       ) : (
         <ul className="video-list">
-          {videos.map((video) => (
+          {result.videos.map((video) => (
             <li key={video.id}>
               <strong>{video.label}</strong>
               <span className="hint">
