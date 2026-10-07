@@ -2,7 +2,7 @@ import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import type {
   PostFinishResult,
-  PreCreateResult,
+  HookDecision,
   TusHTTPRequest,
   TusUpload,
 } from "../types/tusd.types.ts";
@@ -22,11 +22,31 @@ async function findUploader(httpRequest: TusHTTPRequest) {
   return (await UserRepository.findById(verified.userId)) ?? undefined;
 }
 
+async function checkFinisher(
+  upload: TusUpload,
+  httpRequest: TusHTTPRequest,
+): Promise<HookDecision> {
+  const user = await findUploader(httpRequest);
+  if (!user) {
+    return { allowed: false, status: 401, reason: "Sign in to upload." };
+  }
+
+  const record = await UploadRepository.findByTusId(upload.ID);
+  if (!record) {
+    return { allowed: false, status: 404, reason: "Unknown upload." };
+  }
+  if (record.userId !== user.id) {
+    return { allowed: false, status: 403, reason: "This upload is not yours." };
+  }
+
+  return { allowed: true };
+}
+
 export const TusdService = {
   async preCreate(
     upload: TusUpload,
     httpRequest: TusHTTPRequest,
-  ): Promise<PreCreateResult> {
+  ): Promise<HookDecision> {
     if (!(await findUploader(httpRequest))) {
       return { allowed: false, status: 401, reason: "Sign in to upload." };
     }
@@ -57,8 +77,25 @@ export const TusdService = {
     });
   },
 
-  async postFinish(upload: TusUpload): Promise<PostFinishResult> {
-    console.log(`Upload finished: ${upload.ID}, size: ${upload.Size} bytes`);
+  // Checks the person finishing the upload is the one who started it.
+  preFinish(
+    upload: TusUpload,
+    httpRequest: TusHTTPRequest,
+  ): Promise<HookDecision> {
+    return checkFinisher(upload, httpRequest);
+  },
+
+  // All the bytes have arrived: the Upload becomes a Video. tusd sends this
+  // even when pre-finish refused the request (it only changes the response),
+  // so the owner is checked again here and anyone else's finish is ignored.
+  async postFinish(
+    upload: TusUpload,
+    httpRequest: TusHTTPRequest,
+  ): Promise<PostFinishResult> {
+    const decision = await checkFinisher(upload, httpRequest);
+    if (!decision.allowed) return { success: false };
+
+    await UploadRepository.completeIntoVideo(upload.ID);
     return { success: true };
   },
 };

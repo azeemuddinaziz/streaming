@@ -19,6 +19,7 @@ export async function SiteHeader() {
         <nav className="account-nav" aria-label="Account">
           {account ? (
             <>
+              <Link href="/studio">Studio</Link>
               <Link href="/upload">Upload</Link>
               <span>
                 Signed in as <strong>{account.user.name}</strong>

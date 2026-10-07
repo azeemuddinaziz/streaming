@@ -9,6 +9,15 @@ export type AccountResult =
   | ({ ok: true } & Account)
   | { ok: false; message: string };
 
+export type StudioVideo = {
+  id: string;
+  // The filename, until the Video has a title.
+  label: string;
+  status: "PROCESSING" | "READY" | "FAILED";
+  visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
+  createdAt: string;
+};
+
 const DEFAULT_TIMEOUT_MS = 3000;
 const UNREACHABLE = "Could not reach the server. Try again in a moment.";
 
@@ -96,6 +105,27 @@ export async function getCurrentUser(
 
     const { user, channel } = await response.json();
     return { user, channel };
+  } catch {
+    return null;
+  }
+}
+
+// For server components: the signed-in person's own Videos, or null if the
+// request's cookie is not signed in or the API cannot be reached.
+export async function getStudioVideos(
+  cookie: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<StudioVideo[] | null> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/mine`, {
+      headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+
+    const { videos } = await response.json();
+    return videos;
   } catch {
     return null;
   }

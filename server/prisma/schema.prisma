@@ -25,22 +25,54 @@ model User {
 }
 
 model Channel {
-  id     String @id @default(uuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+  id     String  @id @default(uuid())
+  userId String  @unique
+  user   User    @relation(fields: [userId], references: [id])
+  videos Video[]
+}
+
+enum VideoStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum Visibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+// A piece of content on a Channel, created only from a completed Upload.
+model Video {
+  id         String      @id @default(uuid())
+  channelId  String
+  channel    Channel     @relation(fields: [channelId], references: [id])
+  status     VideoStatus @default(PROCESSING)
+  visibility Visibility  @default(PRIVATE)
+  createdAt  DateTime    @default(now())
+  // The Upload this Video was made from, kept as a record of it.
+  upload     Upload?
+
+  @@index([channelId])
 }
 
 // One resumable transfer of a video file, owned by the User who started it.
 model Upload {
-  id        String   @id @default(uuid())
+  id          String    @id @default(uuid())
   // The id tusd gives the upload. With the S3 store it carries the object key
   // followed by a "+" and the multipart upload id, so take the key from before the "+".
-  tusId     String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  filename  String
-  size      BigInt
-  createdAt DateTime @default(now())
+  tusId       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  filename    String
+  size        BigInt
+  createdAt   DateTime  @default(now())
+  // Set once every byte has arrived. An Upload without it is unfinished.
+  completedAt DateTime?
+  // The Video made from this Upload, once it is completed.
+  videoId     String?   @unique
+  video       Video?    @relation(fields: [videoId], references: [id])
 
   @@index([userId])
 }
