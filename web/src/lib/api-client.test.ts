@@ -5,6 +5,7 @@ import {
   checkApiHealth,
   getCurrentUser,
   getStudioVideos,
+  getUnfinishedUploads,
   signIn,
   signOut,
   signUp,
@@ -202,7 +203,7 @@ describe("getStudioVideos", () => {
   it("passes the cookie on and returns the person's Videos", async () => {
     const { baseUrl, requests } = await startRecordingApi(200, { videos });
 
-    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: true, videos });
+    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: true, items: videos });
     expect(requests[0]!.headers.cookie).toBe("token=abc");
     expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/videos/mine" });
   });
@@ -220,5 +221,22 @@ describe("getStudioVideos", () => {
     await new Promise((resolve) => stub!.close(resolve));
     stub = undefined;
     expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("getUnfinishedUploads", () => {
+  it("passes the cookie on and returns the person's unfinished Uploads", async () => {
+    const uploads = [{ id: "u1", filename: "holiday.mp4", size: 100, createdAt: "2026-10-07T12:00:00.000Z" }];
+    const { baseUrl, requests } = await startRecordingApi(200, { uploads });
+
+    expect(await getUnfinishedUploads("token=abc", baseUrl)).toEqual({ ok: true, items: uploads });
+    expect(requests[0]!.headers.cookie).toBe("token=abc");
+    expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/uploads/unfinished" });
+  });
+
+  it("returns signed-out for a 401", async () => {
+    const { baseUrl } = await startRecordingApi(401, { msg: "User not Authenticated." });
+
+    expect(await getUnfinishedUploads("", baseUrl)).toEqual({ ok: false, reason: "signed-out" });
   });
 });

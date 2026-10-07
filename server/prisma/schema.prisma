@@ -70,6 +70,8 @@ model Upload {
   createdAt   DateTime  @default(now())
   // Set once every byte has arrived. An Upload without it is unfinished.
   completedAt DateTime?
+  // Set when the Upload was left unfinished for 24 hours and its bytes were removed.
+  abandonedAt DateTime?
   // The Video made from this Upload, once it is completed.
   videoId     String?   @unique
   video       Video?    @relation(fields: [videoId], references: [id])

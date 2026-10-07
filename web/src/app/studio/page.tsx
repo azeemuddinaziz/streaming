@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getStudioVideos } from "@/lib/api-client";
+import { getStudioVideos, getUnfinishedUploads } from "@/lib/api-client";
 
 export const metadata: Metadata = { title: "Studio · StreamSouk" };
 export const dynamic = "force-dynamic";
@@ -21,9 +21,10 @@ const VISIBILITY_LABEL = {
 
 export default async function StudioPage() {
   const cookieStore = await cookies();
-  const result = cookieStore.has("token")
-    ? await getStudioVideos(cookieStore.toString())
-    : ({ ok: false, reason: "signed-out" } as const);
+  const cookie = cookieStore.toString();
+  const [result, unfinished] = cookieStore.has("token")
+    ? await Promise.all([getStudioVideos(cookie), getUnfinishedUploads(cookie)])
+    : ([{ ok: false, reason: "signed-out" }] as const);
   if (!result.ok && result.reason === "signed-out") redirect("/sign-in");
 
   return (
@@ -37,14 +38,14 @@ export default async function StudioPage() {
         <p role="alert">
           Your videos could not be loaded right now. Try again in a moment.
         </p>
-      ) : result.videos.length === 0 ? (
+      ) : result.items.length === 0 ? (
         <p>
           Nothing here yet. <Link href="/upload">Upload a video</Link> to get
           started.
         </p>
       ) : (
         <ul className="video-list">
-          {result.videos.map((video) => (
+          {result.items.map((video) => (
             <li key={video.id}>
               <strong>{video.label}</strong>
               <span className="hint">
@@ -53,6 +54,25 @@ export default async function StudioPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {unfinished?.ok && unfinished.items.length > 0 && (
+        <>
+          <h2>Unfinished uploads</h2>
+          <p className="hint">
+            These stopped part way. <Link href="/upload">Choose the same file again</Link>{" "}
+            to carry on where it stopped. They are discarded 24 hours after they
+            started.
+          </p>
+          <ul className="video-list">
+            {unfinished.items.map((upload) => (
+              <li key={upload.id}>
+                <strong>{upload.filename}</strong>
+                <span className="hint">Needs resume</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );
