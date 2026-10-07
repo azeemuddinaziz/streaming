@@ -259,3 +259,8 @@ a:hover {
   background: var(--color-surface);
   color: var(--color-danger);
 }
+
+progress {
+  width: 100%;
+  accent-color: var(--color-accent);
+}

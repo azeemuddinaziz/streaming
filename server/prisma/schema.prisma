@@ -21,10 +21,25 @@ model User {
   nameKey  String   @unique
   password String
   channel  Channel?
+  uploads  Upload[]
 }
 
 model Channel {
   id     String @id @default(uuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
+}
+
+// One resumable transfer of a video file, owned by the User who started it.
+model Upload {
+  id        String   @id @default(uuid())
+  // The id tusd gives the upload; it is also the key of its bytes in S3.
+  tusId     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  filename  String
+  size      BigInt
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

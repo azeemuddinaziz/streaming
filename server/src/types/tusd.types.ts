@@ -40,6 +40,8 @@ export type TusHookName =
 
 export interface PreCreateResult {
   allowed: boolean;
+  // Set when the upload is refused.
+  status?: number;
   reason?: string;
 }
 

@@ -18,7 +18,7 @@ export const WebhooksController = {
           return res.status(200).json({
             RejectUpload: true,
             HTTPResponse: {
-              StatusCode: 401,
+              StatusCode: result.status,
               Body: JSON.stringify({ message: result.reason }),
             },
           });
@@ -33,6 +33,9 @@ export const WebhooksController = {
       }
 
       case "post-create":
+        await TusdService.postCreate(Upload, HTTPRequest);
+        return res.status(200).json({});
+
       case "post-receive":
       case "post-terminate":
         // Acknowledged, no action taken yet.
