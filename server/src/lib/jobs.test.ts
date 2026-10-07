@@ -5,7 +5,8 @@ async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean) {
   const deadline = Date.now() + 25_000;
   for (;;) {
     const value = await read();
-    if (done(value) || Date.now() > deadline) return value;
+    if (done(value)) return value;
+    if (Date.now() > deadline) throw new Error(`Timed out waiting; last value: ${String(value)}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -55,9 +56,8 @@ describe("job runner", () => {
     expect(attempts).toBe(3);
   }, 30_000);
 
-  it("holds a queued job until a worker starts", async () => {
+  it("lets a process with no handlers enqueue, and holds the job until a worker starts", async () => {
     const producer = await start();
-    await producer.register("test-later", async () => {});
     await producer.start({ work: false });
     const id = await producer.enqueue("test-later", {});
 

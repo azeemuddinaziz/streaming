@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { PgBoss } from "pg-boss";
 
 export type JobState = "created" | "retry" | "active" | "completed" | "cancelled" | "failed";
@@ -14,16 +13,30 @@ type JobRunnerOptions = {
 
 // Queues work in Postgres (through pg-boss) so it can run outside the request
 // cycle. The API only enqueues; a separate worker process starts the runner
-// with `work: true` and runs the handlers registered on it.
+// with `work: true` and runs the handlers registered on it. Retry settings are
+// stored with the queue when it is first created, so every process should use
+// the same ones.
 export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobRunnerOptions = {}) {
-  const boss = new PgBoss(`${process.env.DATABASE_URL}`);
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is not set.");
+
+  const boss = new PgBoss(connectionString);
   const handlers = new Map<string, JobHandler>();
+  const queues = new Set<string>();
+
+  // Queues must exist before a job is sent or worked. Creating one that exists
+  // is a no-op, so a process that only enqueues needs no registered handler.
+  async function ensureQueue(name: string) {
+    if (queues.has(name)) return;
+    await boss.createQueue(name, { retryLimit, retryDelay: retryDelaySeconds, retryBackoff: true });
+    queues.add(name);
+  }
 
   boss.on("error", (error) => console.error("Job runner error:", error));
 
   return {
     // Declares a job name and the function that runs it. Call before start().
-    async register(name: string, handler: JobHandler) {
+    register(name: string, handler: JobHandler) {
       handlers.set(name, handler);
     },
 
@@ -32,7 +45,7 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
     async start({ work = true }: { work?: boolean } = {}) {
       await boss.start();
       for (const [name, handler] of handlers) {
-        await boss.createQueue(name, { retryLimit, retryDelay: retryDelaySeconds, retryBackoff: true });
+        await ensureQueue(name);
         if (work) {
           await boss.work<object>(name, async ([job]) => {
             await handler(job.data);
@@ -42,6 +55,7 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
     },
 
     async enqueue(name: string, data: object = {}) {
+      await ensureQueue(name);
       const id = await boss.send(name, data);
       if (!id) throw new Error(`Could not queue job "${name}".`);
       return id;
