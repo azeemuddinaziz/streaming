@@ -98,6 +98,22 @@ describe("discarding stale Uploads", () => {
     expect(fine.abandonedAt).not.toBeNull();
   });
 
+  it("wins against an Upload that finishes while its bytes are being removed", async () => {
+    const { id } = await owner();
+    await upload(id, "racing", 25);
+    const { UploadRepository } = await import("../repositories/uploads.repository.ts");
+
+    await UploadService.discardStale(async (tusId) => {
+      // tusd's post-finish arrives after the cleanup has picked the Upload.
+      await UploadRepository.completeIntoVideo(tusId);
+    });
+
+    expect(await prisma.video.count()).toBe(0);
+    const row = await prisma.upload.findUniqueOrThrow({ where: { tusId: "racing" } });
+    expect(row.abandonedAt).not.toBeNull();
+    expect(row.completedAt).toBeNull();
+  });
+
   it("cannot be completed into a Video once it has been abandoned", async () => {
     const { id } = await owner();
     await upload(id, "stale", 25);

@@ -21,10 +21,13 @@ const VISIBILITY_LABEL = {
 
 export default async function StudioPage() {
   const cookieStore = await cookies();
+  if (!cookieStore.has("token")) redirect("/sign-in");
+
   const cookie = cookieStore.toString();
-  const [result, unfinished] = cookieStore.has("token")
-    ? await Promise.all([getStudioVideos(cookie), getUnfinishedUploads(cookie)])
-    : ([{ ok: false, reason: "signed-out" }] as const);
+  const [result, unfinished] = await Promise.all([
+    getStudioVideos(cookie),
+    getUnfinishedUploads(cookie),
+  ]);
   if (!result.ok && result.reason === "signed-out") redirect("/sign-in");
 
   return (
@@ -56,7 +59,11 @@ export default async function StudioPage() {
         </ul>
       )}
 
-      {unfinished?.ok && unfinished.items.length > 0 && (
+      {!unfinished.ok && (
+        <p role="alert">Your unfinished uploads could not be loaded right now.</p>
+      )}
+
+      {unfinished.ok && unfinished.items.length > 0 && (
         <>
           <h2>Unfinished uploads</h2>
           <p className="hint">
