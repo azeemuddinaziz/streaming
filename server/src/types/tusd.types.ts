@@ -38,12 +38,9 @@ export type TusHookName =
   | "post-finish"
   | "post-terminate";
 
-export interface PreCreateResult {
-  allowed: boolean;
-  // Set when the upload is refused.
-  status?: number;
-  reason?: string;
-}
+export type PreCreateResult =
+  | { allowed: true }
+  | { allowed: false; status: number; reason: string };
 
 export interface PostFinishResult {
   success: boolean;

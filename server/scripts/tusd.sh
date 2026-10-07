@@ -6,7 +6,7 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 PORT_API="${PORT:-3000}"
 # tusd takes a regular expression, and credentials need one exact origin.
-ORIGIN_PATTERN="^$(printf '%s' "${WEB_ORIGIN:-http://localhost:3001}" | sed 's/[.]/\\./g')\$"
+ORIGIN_PATTERN="^$(printf '%s' "${WEB_ORIGIN:-http://localhost:3001}" | sed 's/[][\\.*+?^$(){}|/]/\\&/g')\$"
 
 if [ -n "$S3_BUCKET" ]; then
   # Credentials and region come from the standard AWS_* variables.

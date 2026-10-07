@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Upload } from "tus-js-client";
 
 const TUS_URL = process.env.NEXT_PUBLIC_TUS_URL ?? "http://localhost:8080/files/";
@@ -13,7 +13,6 @@ type Status =
 
 export function UploadForm() {
   const [status, setStatus] = useState<Status>({ state: "idle" });
-  const uploadRef = useRef<Upload>(null);
   const busy = status.state === "uploading";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +52,6 @@ export function UploadForm() {
         });
       },
     });
-    uploadRef.current = upload;
 
     // The same file chosen again after an interruption picks up where it stopped.
     const previous = await upload.findPreviousUploads();
