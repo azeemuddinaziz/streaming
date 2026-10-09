@@ -290,6 +290,21 @@ progress {
   background: var(--color-surface);
 }
 
+.thumbnail-picker {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.thumbnail {
+  width: 8rem;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
 .video-details {
   flex-basis: 100%;
 }

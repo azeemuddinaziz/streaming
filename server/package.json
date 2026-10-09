@@ -39,7 +39,8 @@
     "express": "^5.2.1",
     "jose": "^6.2.12",
     "pg": "^8.23.0",
-    "pg-boss": "^12.37.0"
+    "pg-boss": "^12.37.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

@@ -1,4 +1,6 @@
+import sharp from "sharp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createDiskStorage } from "../lib/storage.ts";
 import { prisma } from "../lib/prisma.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { UploadRepository } from "../repositories/uploads.repository.ts";
@@ -12,6 +14,17 @@ vi.mock("../lib/video-queue.ts", () => ({
   PROCESS_VIDEO_JOB: "process-video",
   queueVideoProcessing: vi.fn(async () => {}),
 }));
+
+// Thumbnails are written to a scratch folder, not the development data.
+const scratch = vi.hoisted(() => ({ root: "" }));
+vi.mock("../lib/storage.ts", async (original) => {
+  const actual = await original<typeof import("../lib/storage.ts")>();
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  scratch.root = mkdtempSync(join(tmpdir(), "thumbs-"));
+  return { ...actual, createStorage: () => actual.createDiskStorage(scratch.root) };
+});
 
 let api: Awaited<ReturnType<typeof startTestApi>>;
 
@@ -69,6 +82,7 @@ describe("studio list", () => {
           status: "PROCESSING",
           visibility: "PRIVATE",
           createdAt: expect.any(String),
+          thumbnailPath: null,
         },
       ],
     });
@@ -255,5 +269,93 @@ describe("editing title, description and Visibility", () => {
     const id = await newVideo(ada);
 
     expect((await patch(id, { title: "Holiday.MP4", description: "Away", visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
+  });
+});
+
+describe("custom thumbnail", () => {
+  async function readyVideo(owner: Awaited<ReturnType<typeof person>>, tusId = "t1") {
+    await uploaded(owner, tusId, "clip.mp4");
+    const video = (await prisma.video.findFirstOrThrow({ where: { upload: { tusId } } }));
+    await prisma.video.update({
+      where: { id: video.id },
+      data: { status: "READY", thumbnailKey: `videos/${video.id}/thumbnail.jpg` },
+    });
+    return video.id;
+  }
+  const png = () =>
+    sharp({ create: { width: 1600, height: 900, channels: 3, background: "#c33" } }).png().toBuffer();
+  const put = (id: string, body: BodyInit, type: string, headers: object) =>
+    api.request(`/videos/${id}/thumbnail`, {
+      method: "PUT",
+      body,
+      headers: { "Content-Type": type, ...headers },
+    });
+
+  it("stores the image in several sizes and web formats and points the Video at it", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await readyVideo(ada);
+
+    const response = await put(id, new Uint8Array(await png()), "image/png", ada.bearer);
+    expect(response.status).toBe(200);
+
+    const { thumbnailKey } = await prisma.video.findUniqueOrThrow({ where: { id } });
+    expect(thumbnailKey).toMatch(new RegExp(`^videos/${id}/thumbnails/[\\w-]+/w640\\.jpg$`));
+    const storage = createDiskStorage(scratch.root);
+    const dir = thumbnailKey!.replace("w640.jpg", "");
+    for (const [name, width, format] of [
+      ["w320.webp", 320, "webp"], ["w640.webp", 640, "webp"], ["w1280.webp", 1280, "webp"],
+      ["w320.jpg", 320, "jpeg"], ["w640.jpg", 640, "jpeg"], ["w1280.jpg", 1280, "jpeg"],
+    ] as const) {
+      const stream = (await storage.read(dir + name))!;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(chunk as Buffer);
+      const meta = await sharp(Buffer.concat(chunks)).metadata();
+      expect(meta.format).toBe(format);
+      expect(meta.width).toBe(width);
+    }
+
+    const studio = await (await api.request("/videos/mine", { headers: ada.bearer })).json();
+    expect(studio.videos[0].thumbnailPath).toMatch(/^\/api\/v1\/media\/.+\/thumbnails\/[\w-]+\/w640\.jpg$/);
+  });
+
+  it("rejects a file that is not an image", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await readyVideo(ada);
+
+    const wrongType = await put(id, "hello", "text/plain", ada.bearer);
+    expect(wrongType.status).toBe(415);
+    expect((await wrongType.json()).msg).toMatch(/image/i);
+
+    const fake = await put(id, "not really a png", "image/png", ada.bearer);
+    expect(fake.status).toBe(415);
+  });
+
+  it("rejects an oversized image", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await readyVideo(ada);
+
+    const response = await put(id, new Uint8Array(6 * 1024 * 1024), "image/png", ada.bearer);
+    expect(response.status).toBe(413);
+    expect((await response.json()).msg).toMatch(/5 MB/);
+  });
+
+  it("is for the owner only", async () => {
+    const ada = await person("Ada-Lovelace");
+    const grace = await person("Grace-Hopper");
+    const id = await readyVideo(ada);
+    const body = new Uint8Array(await png());
+
+    expect((await put(id, body, "image/png", grace.bearer)).status).toBe(404);
+    expect((await put(id, body, "image/png", {})).status).toBe(401);
+    expect((await put("missing", body, "image/png", ada.bearer)).status).toBe(404);
+  });
+
+  it("waits until the Video is processed", async () => {
+    const ada = await person("Ada-Lovelace");
+    await uploaded(ada, "p1", "clip.mp4");
+    const video = await prisma.video.findFirstOrThrow({});
+
+    const response = await put(video.id, new Uint8Array(await png()), "image/png", ada.bearer);
+    expect(response.status).toBe(409);
   });
 });

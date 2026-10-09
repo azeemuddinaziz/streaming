@@ -9,6 +9,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
   ".ts": "video/mp2t",
   ".jpg": "image/jpeg",
+  ".webp": "image/webp",
 };
 
 export const VideoProcessingService = {

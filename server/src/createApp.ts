@@ -13,6 +13,10 @@ const handleErrors: ErrorRequestHandler = (error, req, res, _next) => {
     return res.status(error.status).json({ msg: error.message });
   }
 
+  if ((error as { type?: string }).type === "entity.too.large") {
+    return res.status(413).json({ msg: "That image is over 5 MB." });
+  }
+
   console.error(error);
   return res.status(500).json({ msg: "Something went wrong." });
 };

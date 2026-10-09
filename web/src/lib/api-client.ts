@@ -18,6 +18,8 @@ export type StudioVideo = {
   status: "PROCESSING" | "READY" | "FAILED";
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
   createdAt: string;
+  // Where the Thumbnail is served on the API; null until the Video is ready.
+  thumbnailPath: string | null;
 };
 
 const DEFAULT_TIMEOUT_MS = 3000;
@@ -251,6 +253,40 @@ export async function deleteVideo(
     if (response.ok) return { ok: true };
 
     const body = await response.json().catch(() => ({}));
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+export const THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024;
+
+// Replaces a Video's Thumbnail with an image of the owner's. Checks the file
+// first so an obvious mistake gets a message without sending it.
+// Called from the browser.
+export async function replaceThumbnail(
+  id: string,
+  file: File,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; thumbnailPath: string } | { ok: false; message: string }> {
+  if (!file.type.startsWith("image/")) {
+    return { ok: false, message: "Choose an image file (PNG, JPEG or WebP)." };
+  }
+  if (file.size > THUMBNAIL_MAX_BYTES) {
+    return { ok: false, message: "That image is over 5 MB. Choose a smaller one." };
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}/thumbnail`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok && body.video?.thumbnailPath) {
+      return { ok: true, thumbnailPath: body.video.thumbnailPath };
+    }
     return { ok: false, message: body.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };
