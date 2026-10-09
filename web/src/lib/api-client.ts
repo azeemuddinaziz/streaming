@@ -25,7 +25,7 @@ const UNREACHABLE = "Could not reach the server. Try again in a moment.";
 
 // API_URL is read on the server; NEXT_PUBLIC_API_URL is the same address as the
 // browser sees it.
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   return (
     process.env.API_URL ??
     process.env.NEXT_PUBLIC_API_URL ??

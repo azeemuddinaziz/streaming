@@ -39,10 +39,10 @@ export const VideoService = {
     if (status !== "READY" || !video.masterPlaylistKey) return base;
 
     const token = await signMediaToken(video.id);
-    const media = `/api/v1/media/${token}`;
+    const prefix = `videos/${video.id}/`;
     return {
       ...base,
-      playlistPath: `${media}/${video.masterPlaylistKey.slice(`videos/${video.id}/`.length)}`,
+      playlistPath: `/api/v1/media/${token}/${video.masterPlaylistKey.slice(prefix.length)}`,
     };
   },
 

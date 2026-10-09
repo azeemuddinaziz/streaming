@@ -1,13 +1,8 @@
 import { jwtVerify, SignJWT } from "jose";
+import { secret } from "../utils/jwt.ts";
 
 // A signed media address stays valid long enough to watch a long Video.
 export const MEDIA_TOKEN_SECONDS = 6 * 60 * 60;
-
-function secret() {
-  const value = process.env.JWT_SECRET;
-  if (!value) throw new Error("JWT_SECRET is not set");
-  return new TextEncoder().encode(value);
-}
 
 // A token naming one Video, to put in the address of its playlists and
 // segments. The audience keeps a sign-in token from working as one.

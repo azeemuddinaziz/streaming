@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { cache } from "react";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { getWatchVideo } from "@/lib/api-client";
+import { getApiBaseUrl, getWatchVideo } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,9 @@ export default async function WatchPage({ params }: Props) {
           Video <em>not found</em>
         </h1>
         <p>This video does not exist, or it is private.</p>
+        <p>
+          <Link href="/">Back to StreamSouk</Link>
+        </p>
       </section>
     ) : (
       <section className="watch">
@@ -49,7 +53,7 @@ export default async function WatchPage({ params }: Props) {
   const { video } = result;
   const title = video.title ?? "Untitled video";
   // The browser reaches the API at the public address, not the server-side one.
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:3000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
 
   return (
     <section className="watch">
@@ -57,7 +61,7 @@ export default async function WatchPage({ params }: Props) {
         <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} />
       ) : video.status === "FAILED" ? (
         <p className="notice" role="status">
-          Processing this video failed. Retry it from your studio.
+          Processing this video failed. <Link href="/studio">Retry it from your studio</Link>.
         </p>
       ) : (
         <p className="notice" role="status">

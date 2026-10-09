@@ -13,11 +13,14 @@ export function VideoPlayer({ src, label }: { src: string; label: string }) {
     if (!element) return;
     if (element.canPlayType("application/vnd.apple.mpegurl")) {
       element.src = src;
+      element.addEventListener("error", () => setFailed(true));
       return;
     }
 
     let stop = () => {};
+    let cancelled = false;
     import("hls.js").then(({ default: Hls }) => {
+      if (cancelled) return;
       if (!Hls.isSupported()) return setFailed(true);
       const hls = new Hls();
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -27,7 +30,10 @@ export function VideoPlayer({ src, label }: { src: string; label: string }) {
       hls.attachMedia(element);
       stop = () => hls.destroy();
     });
-    return () => stop();
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, [src]);
 
   return (
