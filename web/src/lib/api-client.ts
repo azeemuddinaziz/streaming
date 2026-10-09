@@ -152,3 +152,22 @@ export function getStudioVideos(cookie: string, baseUrl: string = getApiBaseUrl(
 export function getUnfinishedUploads(cookie: string, baseUrl: string = getApiBaseUrl()) {
   return getOwnList<UnfinishedUpload>("uploads/unfinished", "uploads", cookie, baseUrl);
 }
+
+// Asks the API to process a failed Video again. Called from the browser.
+export async function retryVideo(
+  id: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}/retry`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (response.ok) return { ok: true };
+
+    const body = await response.json().catch(() => ({}));
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}

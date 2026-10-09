@@ -6,6 +6,7 @@ import {
   getCurrentUser,
   getStudioVideos,
   getUnfinishedUploads,
+  retryVideo,
   signIn,
   signOut,
   signUp,
@@ -238,5 +239,27 @@ describe("getUnfinishedUploads", () => {
     const { baseUrl } = await startRecordingApi(401, { msg: "User not Authenticated." });
 
     expect(await getUnfinishedUploads("", baseUrl)).toEqual({ ok: false, reason: "signed-out" });
+  });
+});
+
+describe("retryVideo", () => {
+  it("posts to the Video's retry address with the cookie and reports success", async () => {
+    let seen = "";
+    stub = createServer((req, res) => {
+      seen = `${req.method} ${req.url}`;
+      res.writeHead(202, { "Content-Type": "application/json" });
+      res.end("{}");
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await retryVideo("abc", baseUrl)).toEqual({ ok: true });
+    expect(seen).toBe("POST /api/v1/videos/abc/retry");
+  });
+
+  it("returns the API's message when it refuses", async () => {
+    const baseUrl = await startStubApi(409);
+
+    expect(await retryVideo("abc", baseUrl)).toEqual({ ok: false, message: "stub" });
   });
 });

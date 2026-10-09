@@ -15,4 +15,9 @@ export const VideoController = {
     const videos = await VideoService.listStudio(req.user!.id);
     res.status(200).json({ videos });
   },
+
+  async retry(req: Request, res: Response) {
+    await VideoService.retryProcessing(req.user!.id, req.params.id as string);
+    res.status(202).json({ msg: "Processing started." });
+  },
 };

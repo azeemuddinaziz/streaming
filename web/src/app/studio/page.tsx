@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { RetryButton } from "@/components/RetryButton";
 import { getStudioVideos, getUnfinishedUploads } from "@/lib/api-client";
 
 export const metadata: Metadata = { title: "Studio · StreamSouk" };
@@ -54,6 +55,7 @@ export default async function StudioPage() {
               <span className="hint">
                 {STATUS_LABEL[video.status]} · {VISIBILITY_LABEL[video.visibility]}
               </span>
+              {video.status === "FAILED" && <RetryButton videoId={video.id} />}
             </li>
           ))}
         </ul>
