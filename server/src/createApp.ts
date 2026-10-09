@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Router, type ErrorRequestHandler } from "express";
 import { HttpError } from "./errors.ts";
+import channelsRouter from "./routes/channels.routes.ts";
 import mediaRouter from "./routes/media.routes.ts";
 import uploadsRouter from "./routes/uploads.routes.ts";
 import usersRouter from "./routes/users.routes.ts";
@@ -40,6 +41,7 @@ export function createApp() {
     res.status(200).json({ msg: "Hello World!" });
   });
 
+  router.use("/channels", channelsRouter);
   router.use("/videos", videoRouter);
   router.use("/webhooks", webhooksRouter);
   router.use("/media", mediaRouter);

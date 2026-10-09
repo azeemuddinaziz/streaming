@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HttpError } from "../errors.ts";
-import { signMediaToken } from "../lib/media-token.ts";
+import { mediaPath, signMediaToken } from "../lib/media-token.ts";
 import { createStorage } from "../lib/storage.ts";
 import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
@@ -30,11 +30,6 @@ const storage = createStorage();
 function anonymousKey(ip: string | undefined, userAgent: string | undefined) {
   const hash = createHmac("sha256", process.env.JWT_SECRET!).update(`${ip ?? ""}\n${userAgent ?? ""}`).digest("hex");
   return `anon:${hash}`;
-}
-
-// The API address a stored file of a Video is served from.
-async function mediaPath(videoId: string, key: string) {
-  return `/api/v1/media/${await signMediaToken(videoId)}/${key.slice(`videos/${videoId}/`.length)}`;
 }
 
 export const VideoService = {

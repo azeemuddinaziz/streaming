@@ -70,7 +70,7 @@ export default async function WatchPage({ params }: Props) {
       )}
       <h1>{title}</h1>
       <p className="hint">
-        {video.channelName} · {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })} ·{" "}
+        <Link href={`/channels/${encodeURIComponent(video.channelName)}`}>{video.channelName}</Link> · {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })} ·{" "}
         {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
       {video.description && <p className="description">{video.description}</p>}

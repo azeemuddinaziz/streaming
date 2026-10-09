@@ -30,3 +30,8 @@ export async function verifyMediaToken(token: string) {
     return undefined;
   }
 }
+
+// The API address a stored file of a Video is served from.
+export async function mediaPath(videoId: string, key: string) {
+  return `/api/v1/media/${await signMediaToken(videoId)}/${key.slice(`videos/${videoId}/`.length)}`;
+}
