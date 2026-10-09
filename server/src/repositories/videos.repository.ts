@@ -54,7 +54,15 @@ export class VideoRepository {
   static async findOwned(videoId: string, userId: string) {
     return await prisma.video.findFirst({
       where: { id: videoId, channel: { userId } },
+      include: { upload: { select: { filename: true } } },
     });
+  }
+
+  static async updateDetails(
+    videoId: string,
+    data: { title?: string | null; description?: string | null; visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC" },
+  ) {
+    return await prisma.video.update({ where: { id: videoId }, data });
   }
 
   // Puts a failed Video back to processing. Only a failed Video changes, so of

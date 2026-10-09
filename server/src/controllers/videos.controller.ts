@@ -16,6 +16,11 @@ export const VideoController = {
     res.status(200).json({ videos });
   },
 
+  async update(req: Request, res: Response) {
+    const video = await VideoService.updateDetails(req.user!.id, req.params.id as string, req.body ?? {});
+    res.status(200).json({ video });
+  },
+
   async retry(req: Request, res: Response) {
     await VideoService.retryProcessing(req.user!.id, req.params.id as string);
     res.status(202).json({ msg: "Processing started." });

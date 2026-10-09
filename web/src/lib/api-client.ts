@@ -13,6 +13,8 @@ export type StudioVideo = {
   id: string;
   // The filename, until the Video has a title.
   label: string;
+  title: string | null;
+  description: string | null;
   status: "PROCESSING" | "READY" | "FAILED";
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
   createdAt: string;
@@ -162,6 +164,32 @@ export async function retryVideo(
     const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}/retry`, {
       method: "POST",
       credentials: "include",
+    });
+    if (response.ok) return { ok: true };
+
+    const body = await response.json().catch(() => ({}));
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// Saves a Video's title, description and Visibility. Called from the browser.
+export async function updateVideoDetails(
+  id: string,
+  details: {
+    title: string;
+    description: string;
+    visibility: StudioVideo["visibility"];
+  },
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(details),
     });
     if (response.ok) return { ok: true };
 

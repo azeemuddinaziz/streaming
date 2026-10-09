@@ -2,6 +2,19 @@ import { HttpError } from "../errors.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
+const TITLE_MAX = 100;
+const DESCRIPTION_MAX = 5000;
+const VISIBILITIES = ["PRIVATE", "UNLISTED", "PUBLIC"] as const;
+
+// Reads an optional text field: undefined when absent, null when blank.
+function text(value: unknown, field: string, max: number) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new HttpError(400, `The ${field} must be text.`);
+  const trimmed = value.trim();
+  if (trimmed.length > max) throw new HttpError(400, `The ${field} can be at most ${max} characters.`);
+  return trimmed === "" ? null : trimmed;
+}
+
 export const VideoService = {
   // A Video is labelled with its Upload's filename until it has a title.
   async listStudio(userId: string) {
@@ -9,7 +22,9 @@ export const VideoService = {
 
     return videos.map((video) => ({
       id: video.id,
-      label: video.upload?.filename ?? "Untitled",
+      label: video.title ?? video.upload?.filename ?? "Untitled",
+      title: video.title,
+      description: video.description,
       status: video.status,
       visibility: video.visibility,
       createdAt: video.createdAt,
@@ -33,5 +48,37 @@ export const VideoService = {
       await VideoRepository.markFailed(videoId);
       throw new HttpError(503, "Processing could not be started. Try again in a moment.");
     }
+  },
+
+  // Saves the owner's title, description and Visibility, whatever the Video's
+  // processing status. A Video leaves private only if the result has both a
+  // title and a description; the filename label never counts as a title.
+  async updateDetails(userId: string, videoId: string, body: Record<string, unknown>) {
+    const video = await VideoRepository.findOwned(videoId, userId);
+    if (!video) throw new HttpError(404, "Video not found.");
+
+    const title = text(body.title, "title", TITLE_MAX);
+    const description = text(body.description, "description", DESCRIPTION_MAX);
+    const visibility = body.visibility;
+    if (visibility !== undefined && !VISIBILITIES.includes(visibility as never)) {
+      throw new HttpError(400, "Visibility must be PRIVATE, UNLISTED or PUBLIC.");
+    }
+
+    const data = {
+      title: title === video.upload?.filename ? null : title,
+      description,
+      visibility: visibility as (typeof VISIBILITIES)[number] | undefined,
+    };
+    const result = {
+      title: data.title === undefined ? video.title : data.title,
+      description: data.description === undefined ? video.description : data.description,
+      visibility: data.visibility ?? video.visibility,
+    };
+    if (result.visibility !== "PRIVATE" && (!result.title || !result.description)) {
+      throw new HttpError(400, "Add a title and a description before making a video unlisted or public.");
+    }
+
+    const updated = await VideoRepository.updateDetails(videoId, data);
+    return { id: updated.id, title: updated.title, description: updated.description, visibility: updated.visibility };
   },
 };
