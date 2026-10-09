@@ -95,7 +95,7 @@ UI/UX is not the focus of v2 yet, so first versions of screens are plain. Whenev
 
 ## API reference
 
-`docs/openapi.yaml` is a hand-written OpenAPI file the repo owner imports into Postman to browse and call every API (folders in order: Accounts, Uploading, Studio, Watching, Discovering, Internal). It also covers the tusd calls and, as text in its description, the worker's background jobs. Nothing generates or tests it, so any change to an endpoint, its auth or its responses (and any new or changed job) must update `docs/openapi.yaml` in the same ticket. Check it with `npx @apidevtools/swagger-cli validate docs/openapi.yaml`.
+`docs/openapi.yaml` is a hand-written OpenAPI file imported into Postman to browse and call every API (folders in order: Accounts, Uploading, Studio, Watching, Discovering, Internal). It also covers the tusd calls and, as text in its description, the worker's background jobs. Nothing generates or tests it, so any change to an endpoint, its auth or its responses (and any new or changed job) must update `docs/openapi.yaml` in the same ticket. Check it with `npx @apidevtools/swagger-cli validate docs/openapi.yaml`.
 
 ## Agent skills
 

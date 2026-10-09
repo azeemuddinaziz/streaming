@@ -96,7 +96,7 @@ components:
       example:
         id: 0c1a4a52-2d7e-4f58-8a6e-8e3b2f9b6c11
         name: ada-lovelace
-    Account:
+    Me:
       type: object
       properties:
         user: { $ref: "#/components/schemas/User" }
@@ -196,7 +196,7 @@ paths:
           description: Created and signed in. Sets the `token` cookie (httpOnly, 30 days).
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema: { $ref: "#/components/schemas/Me" }
         "400":
           description: Invalid name, email or password.
           content:
@@ -232,7 +232,7 @@ paths:
           description: Signed in. Sets the `token` cookie.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema: { $ref: "#/components/schemas/Me" }
         "401":
           description: Wrong email or password (the same answer for an unknown email).
           content:
@@ -256,7 +256,7 @@ paths:
           description: The signed-in User and their Channel.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
   # --------------------------------------------------------------- Uploading
@@ -288,7 +288,7 @@ paths:
           description: "`filename <base64 of the name>`, for example `filename aG9saWRheS5tcDQ=` for holiday.mp4."
       responses:
         "201": { description: "Created. The `Location` header holds the upload's address." }
-        "400": { description: "The upload has no `filename` metadata (from the hook)." }
+        "400": { description: "The upload has no `filename` metadata, or no size because `Upload-Defer-Length` was used (from the hook)." }
         "401": { description: "No valid token (from the hook)." }
   /files/{uploadId}:
     servers:
@@ -320,6 +320,8 @@ paths:
             schema: { type: string, format: binary }
       responses:
         "204": { description: "Bytes accepted. `Upload-Offset` has the new offset." }
+        "403": { description: "The last bytes arrived but the upload is not yours (from the `pre-finish` hook). The bytes stay and the Upload is discarded after 24 hours." }
+        "404": { description: "Unknown upload (from the `pre-finish` hook)." }
         "409": { description: "Wrong offset; HEAD to find the right one." }
     delete:
       tags: [Uploading]
@@ -523,6 +525,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Processing could not be started. Try again in a moment. }
 
   # ---------------------------------------------------------------- Watching
   /videos/{id}/watch:
@@ -613,7 +616,13 @@ paths:
       responses:
         "200": { description: "A playlist or file." }
         "302": { description: "Redirect to a signed storage address." }
-        "404": { description: "Bad or expired token, or an unsafe or missing path." }
+        "403":
+          description: The token is bad or expired (get a fresh `playlistPath` from Watch a video).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: This address has expired. }
+        "404": { description: "An unsafe or missing path." }
 
   # -------------------------------------------------------------- Discovering
   /videos:
@@ -692,6 +701,17 @@ paths:
               example: { msg: Channel not found. }
 
   # ---------------------------------------------------------------- Internal
+  /:
+    get:
+      tags: [Internal]
+      summary: Hello world
+      description: A placeholder at the API root. Handy to check the server is up.
+      responses:
+        "200":
+          description: Alive.
+          content:
+            application/json:
+              example: { msg: Hello World! }
   /webhooks/tusd:
     post:
       tags: [Internal]
