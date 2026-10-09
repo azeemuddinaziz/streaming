@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   checkApiHealth,
+  deleteVideo,
   getCurrentUser,
   getStudioVideos,
   getUnfinishedUploads,
@@ -287,5 +288,23 @@ describe("getWatchVideo", () => {
     expect(await getWatchVideo("v1", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getWatchVideo("v1", "", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("deleteVideo", () => {
+  it("sends a DELETE with the cookie and reports success or the API's message", async () => {
+    let seen = "";
+    stub = createServer((req, res) => {
+      seen = `${req.method} ${req.url}`;
+      res.writeHead(204).end();
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await deleteVideo("v1", baseUrl)).toEqual({ ok: true });
+    expect(seen).toBe("DELETE /api/v1/videos/v1");
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await deleteVideo("v1", await startStubApi(404))).toEqual({ ok: false, message: "stub" });
   });
 });

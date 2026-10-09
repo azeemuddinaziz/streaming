@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { VideoDetailsForm } from "@/components/VideoDetailsForm";
+import { DeleteVideoButton } from "@/components/DeleteVideoButton";
 import { RetryButton } from "@/components/RetryButton";
 import { getStudioVideos, getUnfinishedUploads } from "@/lib/api-client";
 
@@ -58,6 +59,7 @@ export default async function StudioPage() {
               </span>
               {video.status === "READY" && <Link href={`/watch/${video.id}`}>Watch</Link>}
               {video.status === "FAILED" && <RetryButton videoId={video.id} />}
+              <DeleteVideoButton videoId={video.id} label={video.label} />
               <VideoDetailsForm video={video} />
             </li>
           ))}

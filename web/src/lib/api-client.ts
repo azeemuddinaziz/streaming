@@ -237,3 +237,22 @@ export async function getWatchVideo(
     return { ok: false, reason: "unavailable" };
   }
 }
+
+// Deletes a Video: it disappears for everyone, the owner included. Called from the browser.
+export async function deleteVideo(
+  id: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (response.ok) return { ok: true };
+
+    const body = await response.json().catch(() => ({}));
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}

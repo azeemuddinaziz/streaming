@@ -4,22 +4,22 @@ import { prisma } from "../lib/prisma.ts";
 export class VideoRepository {
   static async listForUser(userId: string) {
     return await prisma.video.findMany({
-      where: { channel: { userId } },
+      where: { channel: { userId }, deletedAt: null },
       include: { upload: { select: { filename: true } } },
       orderBy: { createdAt: "desc" },
     });
   }
 
   static async findForWatch(videoId: string) {
-    return await prisma.video.findUnique({
-      where: { id: videoId },
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
       include: { channel: { select: { userId: true, user: { select: { name: true } } } } },
     });
   }
 
   static async findForProcessing(videoId: string) {
-    return await prisma.video.findUnique({
-      where: { id: videoId },
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
       include: { upload: true },
     });
   }
@@ -61,7 +61,7 @@ export class VideoRepository {
 
   static async findOwned(videoId: string, userId: string) {
     return await prisma.video.findFirst({
-      where: { id: videoId, channel: { userId } },
+      where: { id: videoId, channel: { userId }, deletedAt: null },
       include: { upload: { select: { filename: true } } },
     });
   }
@@ -76,6 +76,7 @@ export class VideoRepository {
     const claimed = await prisma.video.updateMany({
       where: {
         id: before.id,
+        deletedAt: null,
         title: before.title,
         description: before.description,
         visibility: before.visibility,
@@ -89,8 +90,18 @@ export class VideoRepository {
   // two simultaneous retries exactly one wins.
   static async restartProcessing(videoId: string) {
     const claimed = await prisma.video.updateMany({
-      where: { id: videoId, status: "FAILED" },
+      where: { id: videoId, status: "FAILED", deletedAt: null },
       data: { status: "PROCESSING" },
+    });
+    return claimed.count === 1;
+  }
+
+  // Flags the owner's Video as deleted. False if it is not theirs, does not
+  // exist or was already deleted.
+  static async softDelete(videoId: string, userId: string) {
+    const claimed = await prisma.video.updateMany({
+      where: { id: videoId, channel: { userId }, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
     return claimed.count === 1;
   }

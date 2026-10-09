@@ -54,6 +54,9 @@ model Video {
   title       String?
   description String?
   createdAt  DateTime    @default(now())
+  // Set when the owner deletes the Video. Nothing is removed; every read path
+  // must leave out a Video that has it (see ADR 0001).
+  deletedAt  DateTime?
   // The Upload this Video was made from, kept as a record of it.
   upload     Upload?
   // Storage keys of what processing produced; null until the Video is ready.
