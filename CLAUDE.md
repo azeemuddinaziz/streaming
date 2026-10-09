@@ -93,6 +93,10 @@ UI/UX is not the focus of v2 yet, so first versions of screens are plain. Whenev
 
 `v2` is the default branch. Work flows: ticket (GitHub issue) → feature branch from `v2` → implement → code review → pull request → merge into `v2`. Never commit directly to `v2`.
 
+## API reference
+
+`docs/openapi.yaml` is a hand-written OpenAPI file imported into Postman to browse and call every API (folders in order: Accounts, Uploading, Studio, Watching, Discovering, Internal). It also covers the tusd calls and, as text in its description, the worker's background jobs. Nothing generates or tests it, so any change to an endpoint, its auth or its responses (and any new or changed job) must update `docs/openapi.yaml` in the same ticket. Check it with `npx @apidevtools/swagger-cli validate docs/openapi.yaml`.
+
 ## Agent skills
 
 ### Issue tracker
