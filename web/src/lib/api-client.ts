@@ -209,6 +209,7 @@ export type WatchVideo = {
   status: "PROCESSING" | "READY" | "FAILED";
   channelName: string;
   createdAt: string;
+  views: number;
   // Where the master playlist is served, on the API. Only for a ready Video.
   playlistPath?: string;
 };
@@ -290,5 +291,19 @@ export async function replaceThumbnail(
     return { ok: false, message: body.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// Tells the API that playback of a Video ran long enough to count as a View.
+// Called from the browser; the cookie lets the API skip the owner.
+export async function reportView(id: string, baseUrl: string = getApiBaseUrl()): Promise<boolean> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}/views`, {
+      method: "POST",
+      credentials: "include",
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }

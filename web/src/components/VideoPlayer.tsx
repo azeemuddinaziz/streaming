@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { reportView } from "@/lib/api-client";
+import { createViewTracker } from "@/lib/view-tracker";
 
 // Plays an HLS stream. Safari plays it natively; elsewhere hls.js feeds the
 // same <video>, whose built-in controls are keyboard accessible.
-export function VideoPlayer({ src, label }: { src: string; label: string }) {
+export function VideoPlayer({ src, label, videoId }: { src: string; label: string; videoId: string }) {
   const video = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -35,6 +37,26 @@ export function VideoPlayer({ src, label }: { src: string; label: string }) {
       stop();
     };
   }, [src]);
+
+  // Reports a View once playback has run long enough (see view-tracker).
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    const tracker = createViewTracker(() => void reportView(videoId));
+    const onTime = () => tracker.tick(element.currentTime, element.duration);
+    const onEnded = () => tracker.ended(element.duration);
+    const onInterrupt = () => tracker.interrupt();
+    element.addEventListener("timeupdate", onTime);
+    element.addEventListener("ended", onEnded);
+    element.addEventListener("pause", onInterrupt);
+    element.addEventListener("seeking", onInterrupt);
+    return () => {
+      element.removeEventListener("timeupdate", onTime);
+      element.removeEventListener("ended", onEnded);
+      element.removeEventListener("pause", onInterrupt);
+      element.removeEventListener("seeking", onInterrupt);
+    };
+  }, [videoId]);
 
   return (
     <>

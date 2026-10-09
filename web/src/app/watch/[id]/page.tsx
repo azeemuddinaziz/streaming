@@ -58,7 +58,7 @@ export default async function WatchPage({ params }: Props) {
   return (
     <section className="watch">
       {video.status === "READY" && video.playlistPath ? (
-        <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} />
+        <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} videoId={video.id} />
       ) : video.status === "FAILED" ? (
         <p className="notice" role="status">
           Processing this video failed. <Link href="/studio">Retry it from your studio</Link>.
@@ -70,7 +70,8 @@ export default async function WatchPage({ params }: Props) {
       )}
       <h1>{title}</h1>
       <p className="hint">
-        {video.channelName} · {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
+        {video.channelName} · {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })} ·{" "}
+        {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
       {video.description && <p className="description">{video.description}</p>}
     </section>

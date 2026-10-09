@@ -63,6 +63,7 @@ model Video {
   masterPlaylistKey String?
   thumbnailKey      String?
   renditions        Rendition[]
+  views             View[]
 
   @@index([channelId])
 }
@@ -101,4 +102,18 @@ model Upload {
   video       Video?    @relation(fields: [videoId], references: [id])
 
   @@index([userId])
+}
+
+// One counted watch of a Video. The unique key is what keeps a Viewer to one
+// View per Video per day: `viewerKey` is "user:<id>" or "anon:<hash>", never a raw IP address.
+model View {
+  id        String   @id @default(uuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  viewerKey String
+  // The UTC calendar day, as YYYY-MM-DD.
+  day       String
+  createdAt DateTime @default(now())
+
+  @@unique([videoId, viewerKey, day])
 }
