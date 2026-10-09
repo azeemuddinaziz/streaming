@@ -12,7 +12,8 @@ const load = cache((name: string) => getChannelPage(name));
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const result = await load((await params).name);
-  return { title: result.ok ? `${result.channel.name} · StreamSouk` : "Channel · StreamSouk" };
+  if (result.ok) return { title: `${result.channel.name} · StreamSouk` };
+  return { title: result.reason === "not-found" ? "Channel not found · StreamSouk" : "Channel · StreamSouk" };
 }
 
 export default async function ChannelPage({ params }: Props) {
@@ -56,7 +57,7 @@ export default async function ChannelPage({ params }: Props) {
                 <Link href={`/watch/${video.id}`} className="channel-video">
                   {video.thumbnailPath ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img className="thumbnail" src={`${apiUrl}${video.thumbnailPath}`} alt="" />
+                    <img className="thumbnail" src={`${apiUrl}${video.thumbnailPath}`} alt="" loading="lazy" />
                   ) : (
                     <span className="thumbnail" aria-hidden="true" />
                   )}
