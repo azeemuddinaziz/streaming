@@ -10,6 +10,13 @@ export class VideoRepository {
     });
   }
 
+  static async findForWatch(videoId: string) {
+    return await prisma.video.findUnique({
+      where: { id: videoId },
+      include: { channel: { select: { userId: true, user: { select: { name: true } } } } },
+    });
+  }
+
   static async findForProcessing(videoId: string) {
     return await prisma.video.findUnique({
       where: { id: videoId },
