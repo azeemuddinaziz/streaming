@@ -67,6 +67,10 @@ ESM (`"type": "module"`), run directly by `tsx` with no build step. Relative imp
 
 Server components call the API through `src/lib/api-client.ts` and forward the browser's cookie; the sign-up and sign-in forms are client components that call the API directly with `credentials: "include"` (hence the CORS allow-list). `API_URL` is the server-side address and `NEXT_PUBLIC_API_URL` the browser's. The header reads the `token` cookie to show who is signed in, so every page renders dynamically. Styling uses the semantic CSS variables defined once in `src/app/globals.css`; never write raw colors in components. Imports are extensionless (bundler resolution), unlike the server. Tests exercise the API client over real HTTP against a stub server; there are no component tests yet.
 
+## UI/UX
+
+UI/UX is not the focus of v2 yet, so first versions of screens are plain. Whenever you touch a screen, improve its UX where it is cheap and in scope (clear labels, inline validation, loading and empty states, confirmation after actions, accessible controls), following `docs/design.md`. Anything bigger goes in the "UX Improvements" section of ticket #1 rather than being skipped or silently expanded.
+
 ## Git workflow
 
 `v2` is the default branch. Work flows: ticket (GitHub issue) → feature branch from `v2` → implement → code review → pull request → merge into `v2`. Never commit directly to `v2`.
