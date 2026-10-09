@@ -23,7 +23,13 @@ export function DeleteVideoButton({ videoId, label }: { videoId: string; label: 
 
   return (
     <>
-      <button className="button button-secondary" type="button" onClick={onClick} disabled={busy}>
+      <button
+        className="button button-secondary"
+        type="button"
+        onClick={onClick}
+        disabled={busy}
+        aria-label={`Delete ${label}`}
+      >
         {busy ? "Deleting…" : "Delete"}
       </button>
       {message && <span role="alert">{message}</span>}

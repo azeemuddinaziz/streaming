@@ -18,8 +18,8 @@ export class VideoRepository {
   }
 
   static async findForProcessing(videoId: string) {
-    return await prisma.video.findUnique({
-      where: { id: videoId },
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
       include: { upload: true },
     });
   }
