@@ -10,7 +10,7 @@ export const MediaController = {
     );
     if (file.redirect) return res.redirect(302, file.redirect);
 
-    res.type(file.contentType);
+    res.type(file.contentType!);
     res.set("Cache-Control", "private, max-age=300");
     await pipeline(file.body!, res);
   },
