@@ -53,8 +53,26 @@ model Video {
   createdAt  DateTime    @default(now())
   // The Upload this Video was made from, kept as a record of it.
   upload     Upload?
+  // Storage keys of what processing produced; null until the Video is ready.
+  masterPlaylistKey String?
+  thumbnailKey      String?
+  renditions        Rendition[]
 
   @@index([channelId])
+}
+
+// One resolution of a Video, cut into HLS segments listed by its own playlist.
+model Rendition {
+  id          String @id @default(uuid())
+  videoId     String
+  video       Video  @relation(fields: [videoId], references: [id])
+  width       Int
+  height      Int
+  // Peak bits per second the master playlist advertises for this Rendition.
+  bandwidth   Int
+  playlistKey String
+
+  @@unique([videoId, height])
 }
 
 // One resumable transfer of a video file, owned by the User who started it.
