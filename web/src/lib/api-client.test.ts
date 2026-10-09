@@ -6,6 +6,7 @@ import {
   getCurrentUser,
   getStudioVideos,
   getUnfinishedUploads,
+  getWatchVideo,
   retryVideo,
   signIn,
   signOut,
@@ -261,5 +262,30 @@ describe("retryVideo", () => {
     const baseUrl = await startStubApi(409);
 
     expect(await retryVideo("abc", baseUrl)).toEqual({ ok: false, message: "stub" });
+  });
+});
+
+describe("getWatchVideo", () => {
+  it("returns the Video, and sends the cookie so an owner can open a private one", async () => {
+    let seen: IncomingHttpHeaders = {};
+    stub = createServer((req, res) => {
+      seen = req.headers;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ video: { id: "v1", status: "READY" } }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await getWatchVideo("v1", "token=abc", baseUrl)).toEqual({
+      ok: true,
+      video: { id: "v1", status: "READY" },
+    });
+    expect(seen.cookie).toBe("token=abc");
+  });
+
+  it("tells not found apart from the API being unavailable", async () => {
+    expect(await getWatchVideo("v1", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getWatchVideo("v1", "", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
   });
 });

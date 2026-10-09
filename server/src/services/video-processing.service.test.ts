@@ -34,6 +34,12 @@ function fakeStorage() {
     async put(key, _file, contentType) {
       stored.set(key, contentType);
     },
+    async read() {
+      return undefined;
+    },
+    async signedUrl() {
+      return undefined;
+    },
   };
   return { storage, stored };
 }

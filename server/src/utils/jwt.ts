@@ -5,7 +5,7 @@ import { jwtVerify, SignJWT } from "jose";
 export const TOKEN_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
 export const TOKEN_RENEW_AFTER_SECONDS = 24 * 60 * 60;
 
-function secret() {
+export function secret() {
   const value = process.env.JWT_SECRET;
   if (!value) throw new Error("JWT_SECRET is not set");
   return new TextEncoder().encode(value);
@@ -29,7 +29,8 @@ export async function verifyToken(token: string) {
     const { payload } = await jwtVerify(token, secret(), {
       algorithms: ["HS256"],
     });
-    if (!payload.sub || !payload.iat) return undefined;
+    // Tokens made for something else (media addresses) are not sign-ins.
+    if (!payload.sub || !payload.iat || payload.aud) return undefined;
 
     return { userId: payload.sub, issuedAt: payload.iat };
   } catch {

@@ -25,7 +25,7 @@ const UNREACHABLE = "Could not reach the server. Try again in a moment.";
 
 // API_URL is read on the server; NEXT_PUBLIC_API_URL is the same address as the
 // browser sees it.
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   return (
     process.env.API_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
@@ -197,5 +197,43 @@ export async function updateVideoDetails(
     return { ok: false, message: body.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };
+  }
+}
+
+export type WatchVideo = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  status: "PROCESSING" | "READY" | "FAILED";
+  channelName: string;
+  createdAt: string;
+  // Where the master playlist is served, on the API. Only for a ready Video.
+  playlistPath?: string;
+};
+
+export type WatchResult =
+  | { ok: true; video: WatchVideo }
+  | { ok: false; reason: "not-found" | "unavailable" };
+
+// For server components: loads a Video for the watch page. The cookie lets the
+// owner open their own private Video; anyone else passes an empty one.
+export async function getWatchVideo(
+  id: string,
+  cookie: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<WatchResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(id)}/watch`, {
+      headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 404) return { ok: false, reason: "not-found" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    const { video } = await response.json();
+    return { ok: true, video };
+  } catch {
+    return { ok: false, reason: "unavailable" };
   }
 }

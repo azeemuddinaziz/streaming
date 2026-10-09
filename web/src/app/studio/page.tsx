@@ -56,6 +56,7 @@ export default async function StudioPage() {
               <span className="hint">
                 {STATUS_LABEL[video.status]} · {VISIBILITY_LABEL[video.visibility]}
               </span>
+              {video.status === "READY" && <Link href={`/watch/${video.id}`}>Watch</Link>}
               {video.status === "FAILED" && <RetryButton videoId={video.id} />}
               <VideoDetailsForm video={video} />
             </li>

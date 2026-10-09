@@ -40,6 +40,26 @@ export class AuthenticationMiddleware {
   };
 }
 
+export class OptionalAuthenticationMiddleware {
+  // For pages anyone may open: identifies the person when a valid token comes
+  // with the request, and carries on as an anonymous Viewer when not.
+  static identify = async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      const found = pickToken(req.headers.authorization, req.headers.cookie);
+      const verified = found && (await verifyToken(found.token));
+      const user = verified && (await UserRepository.findByIdWithChannel(verified.userId));
+      if (user?.channel) {
+        const account = toAccount(user);
+        req.user = account.user;
+        req.channel = account.channel;
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
 export class AuthorizationMiddleware {
   static role = () => {};
 }

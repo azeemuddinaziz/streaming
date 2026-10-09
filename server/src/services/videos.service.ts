@@ -1,4 +1,5 @@
 import { HttpError } from "../errors.ts";
+import { signMediaToken } from "../lib/media-token.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
@@ -16,6 +17,35 @@ function text(value: unknown, field: string, max: number) {
 }
 
 export const VideoService = {
+  // What the watch page needs. A private Video, like a missing one, is not
+  // found for anyone but its owner. Anyone but the owner is told a Video that
+  // is not ready is still processing; only a ready one gets playable addresses.
+  async watch(viewerId: string | undefined, videoId: string) {
+    const video = await VideoRepository.findForWatch(videoId);
+    const isOwner = viewerId !== undefined && video?.channel.userId === viewerId;
+    if (!video || (video.visibility === "PRIVATE" && !isOwner)) {
+      throw new HttpError(404, "Video not found.");
+    }
+
+    const status = video.status === "FAILED" && !isOwner ? "PROCESSING" : video.status;
+    const base = {
+      id: video.id,
+      title: video.title,
+      description: video.description,
+      status,
+      channelName: video.channel.user.name,
+      createdAt: video.createdAt,
+    };
+    if (status !== "READY" || !video.masterPlaylistKey) return base;
+
+    const token = await signMediaToken(video.id);
+    const prefix = `videos/${video.id}/`;
+    return {
+      ...base,
+      playlistPath: `/api/v1/media/${token}/${video.masterPlaylistKey.slice(prefix.length)}`,
+    };
+  },
+
   // A Video is labelled with its Upload's filename until it has a title.
   async listStudio(userId: string) {
     const videos = await VideoRepository.listForUser(userId);
