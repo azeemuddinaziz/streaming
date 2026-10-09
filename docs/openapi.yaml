@@ -1,0 +1,750 @@
+openapi: 3.0.3
+info:
+  title: StreamSouk API
+  version: v1
+  description: |
+    Every API of StreamSouk v2 in one place, written by hand for import into Postman
+    (see ticket #43). Keep it in step with the routes: any change to an endpoint, its
+    auth or its responses updates this file in the same ticket.
+
+    ## Setup in Postman
+    1. Import this file (Import, then choose the file).
+    2. Create an environment with two variables: `baseUrl` = `http://localhost:3000/api/v1`
+       and `tusdUrl` = `http://localhost:8080`.
+    3. Run **Accounts, Sign up** (or **Sign in**) once. The API answers with a `token`
+       cookie, and Postman's cookie jar sends it on every later request to the same
+       host. Cookies ignore ports, so the tusd calls are signed in too.
+    4. The fallback is `Authorization: Bearer <token>`. The token is the value of the
+       `token` cookie (30 days). There is no revoke; sign-out only clears the cookie.
+
+    Errors from the API are always JSON `{ "msg": "..." }` with the status shown on
+    each request. The tusd hook and the tus calls are the exception (see Uploading
+    and Internal).
+
+    ## How uploading a Video works
+    Video bytes never go through the API. Per file: (1) sign in; (2) create the upload
+    on tusd with `Upload-Metadata: filename <base64 of the file name>` (tusd asks the
+    API's `pre-create` hook, which needs your token and a filename); (3) send the bytes
+    with PATCH (HEAD tells you the offset to resume from); (4) when the last byte
+    lands, the `post-finish` hook turns the Upload into a private, processing Video on
+    your Channel. Follow it in **Studio, My videos**. It becomes `READY` once the
+    worker has processed it. Then give it a title, a description and a Visibility in
+    **Studio, Edit details**.
+
+    ## Background jobs (worker process, no HTTP)
+    The worker (`pnpm worker`) runs these jobs from a queue kept in the app's Postgres.
+    They cannot be called from Postman; they are listed here so the whole system is in one place.
+
+    | Job | Trigger | What it does | On failure |
+    | --- | --- | --- | --- |
+    | `process-video` | Queued by the `post-finish` hook, and again by **Studio, Retry processing** | Downloads the original, encodes 6-second HLS Renditions (1080/720/480/360p, up to the source height) with a `master.m3u8`, makes a first-frame thumbnail, then marks the Video `READY` | Retried 3 times with backoff; after the last attempt the Video is `FAILED` (retry it from the studio) |
+    | `discard-stale-uploads` | Hourly (`0 * * * *`, UTC) | Finds Uploads unfinished for over 24 hours, marks them abandoned, asks tusd to delete their bytes. The record stays | The claim is given back and the job fails, so it is retried |
+
+servers:
+  - url: "{{baseUrl}}"
+    description: The API (default http://localhost:3000/api/v1)
+
+tags:
+  - name: Accounts
+    description: Sign up, sign in and out, and who am I.
+  - name: Uploading
+    description: Sending a video file to tusd, and resuming it.
+  - name: Studio
+    description: The signed-in person's own Videos. Only the owner can use these; someone else's Video is 404.
+  - name: Watching
+    description: Open to anyone, signed in or not.
+  - name: Discovering
+    description: Public listings, open to anyone.
+  - name: Internal
+    description: Called by other processes, not by people. Listed to explain their behaviour.
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: Set by Sign up and Sign in. Postman's cookie jar sends it.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: The same token, for callers that do not keep cookies.
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        msg:
+          type: string
+      example:
+        msg: Video not found.
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string, description: "The account name; also the Channel's name." }
+      example:
+        id: 5b0f8f0e-5b8a-4c7e-9a52-3f3a2f1d9a10
+        email: ada@example.com
+        name: ada-lovelace
+    Channel:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+      example:
+        id: 0c1a4a52-2d7e-4f58-8a6e-8e3b2f9b6c11
+        name: ada-lovelace
+    Account:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        channel: { $ref: "#/components/schemas/Channel" }
+    Status:
+      type: string
+      enum: [PROCESSING, READY, FAILED]
+    Visibility:
+      type: string
+      enum: [PRIVATE, UNLISTED, PUBLIC]
+    StudioVideo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, description: "The title, else the Upload's filename." }
+        title: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/Status" }
+        visibility: { $ref: "#/components/schemas/Visibility" }
+        createdAt: { type: string, format: date-time }
+        thumbnailPath:
+          type: string
+          nullable: true
+          description: A media address under /media/{token}/..., relative to the API host (prefix with the server origin).
+      example:
+        id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
+        label: holiday.mp4
+        title: null
+        description: null
+        status: READY
+        visibility: PRIVATE
+        createdAt: "2026-10-01T09:30:00.000Z"
+        thumbnailPath: /api/v1/media/eyJhbGciOi.../videos/7d3c0b9e/thumbnail.jpg
+    ShowcaseVideo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        channelName: { type: string }
+        thumbnailPath: { type: string, nullable: true }
+    ChannelVideo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        thumbnailPath: { type: string, nullable: true }
+  parameters:
+    VideoId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: The Video's id.
+  responses:
+    Unauthenticated:
+      description: No valid token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { msg: User not Authenticated. }
+    NotFound:
+      description: A missing or deleted Video, or one that is not yours.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { msg: Video not found. }
+
+paths:
+  # ---------------------------------------------------------------- Accounts
+  /users/sign-up:
+    post:
+      tags: [Accounts]
+      summary: Sign up
+      description: |
+        Creates the User and its Channel and signs the person in (sets the `token` cookie).
+        The account name is 3 to 30 letters, digits and hyphens (no leading or trailing
+        hyphen), unique regardless of case, and cannot be changed later.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 3, maxLength: 30 }
+                email: { type: string }
+                password: { type: string, minLength: 8, maxLength: 128 }
+            example:
+              name: ada-lovelace
+              email: ada@example.com
+              password: correct horse battery
+      responses:
+        "201":
+          description: Created and signed in. Sets the `token` cookie (httpOnly, 30 days).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "400":
+          description: Invalid name, email or password.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Account name must be 3 to 30 characters. }
+        "409":
+          description: The account name or the email is already taken.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: That account name is already taken. }
+  /users/sign-in:
+    post:
+      tags: [Accounts]
+      summary: Sign in
+      description: Run this once; Postman then sends the `token` cookie on every request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+            example:
+              email: ada@example.com
+              password: correct horse battery
+      responses:
+        "200":
+          description: Signed in. Sets the `token` cookie.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401":
+          description: Wrong email or password (the same answer for an unknown email).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Incorrect email or password. }
+  /users/sign-out:
+    post:
+      tags: [Accounts]
+      summary: Sign out
+      description: Clears the cookie only. The token itself is not revoked.
+      responses:
+        "204": { description: "Cookie cleared." }
+  /users/me:
+    get:
+      tags: [Accounts]
+      summary: Who am I
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The signed-in User and their Channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # --------------------------------------------------------------- Uploading
+  /files/:
+    servers:
+      - url: "{{tusdUrl}}"
+        description: The tusd upload server (default http://localhost:8080), not the API.
+    post:
+      tags: [Uploading]
+      summary: Create an upload (tus)
+      description: |
+        Starts a resumable upload on tusd. tusd asks the API's `pre-create` hook first, which
+        needs your token (cookie or Bearer, forwarded by tusd) and a `filename` in the
+        metadata. Without a token it answers 401, without a filename 400. The answer
+        carries the new upload's address in the `Location` header; use it for HEAD and PATCH.
+        Send the first bytes right away with a PATCH, or all at once by also setting the body
+        and `Content-Type: application/offset+octet-stream`.
+      parameters:
+        - { name: Tus-Resumable, in: header, required: true, schema: { type: string, enum: ["1.0.0"] } }
+        - name: Upload-Length
+          in: header
+          required: true
+          schema: { type: integer }
+          description: Total size of the file in bytes.
+        - name: Upload-Metadata
+          in: header
+          required: true
+          schema: { type: string }
+          description: "`filename <base64 of the name>`, for example `filename aG9saWRheS5tcDQ=` for holiday.mp4."
+      responses:
+        "201": { description: "Created. The `Location` header holds the upload's address." }
+        "400": { description: "The upload has no `filename` metadata (from the hook)." }
+        "401": { description: "No valid token (from the hook)." }
+  /files/{uploadId}:
+    servers:
+      - url: "{{tusdUrl}}"
+        description: The tusd upload server, not the API.
+    parameters:
+      - { name: uploadId, in: path, required: true, schema: { type: string }, description: "The id at the end of the `Location` header." }
+      - { name: Tus-Resumable, in: header, required: true, schema: { type: string, enum: ["1.0.0"] } }
+    head:
+      tags: [Uploading]
+      summary: Ask where an upload stands (tus)
+      description: The `Upload-Offset` response header says how many bytes tusd already has, so you know where to resume.
+      responses:
+        "200": { description: "Headers `Upload-Offset` and `Upload-Length`." }
+        "404": { description: "Unknown or discarded upload." }
+    patch:
+      tags: [Uploading]
+      summary: Send bytes (tus)
+      description: |
+        Appends bytes at `Upload-Offset`. When the last byte lands, the `pre-finish` hook checks
+        you own the upload and `post-finish` creates the Video. Anyone else finishing it gets
+        a refusal and creates nothing.
+      parameters:
+        - { name: Upload-Offset, in: header, required: true, schema: { type: integer } }
+        - { name: Content-Type, in: header, required: true, schema: { type: string, enum: [application/offset+octet-stream] } }
+      requestBody:
+        content:
+          application/offset+octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "204": { description: "Bytes accepted. `Upload-Offset` has the new offset." }
+        "409": { description: "Wrong offset; HEAD to find the right one." }
+    delete:
+      tags: [Uploading]
+      summary: Terminate an upload (tus)
+      description: Deletes the bytes. This is also what the hourly cleanup job asks of tusd.
+      responses:
+        "204": { description: "Terminated." }
+        "404": { description: "Already gone." }
+  /uploads/unfinished:
+    get:
+      tags: [Uploading]
+      summary: My resumable uploads
+      description: Uploads not completed, not abandoned and started under 24 hours ago. Shown in the web studio.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploads:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        filename: { type: string }
+                        size: { type: integer }
+                        createdAt: { type: string, format: date-time }
+              example:
+                uploads:
+                  - id: 3e2f7f64-3c0a-4d3b-8f4e-0a1b2c3d4e5f
+                    filename: holiday.mp4
+                    size: 104857600
+                    createdAt: "2026-10-10T08:00:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ------------------------------------------------------------------ Studio
+  /videos/mine:
+    get:
+      tags: [Studio]
+      summary: My videos
+      description: Every non-deleted Video on your Channel, with its processing status.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  videos:
+                    type: array
+                    items: { $ref: "#/components/schemas/StudioVideo" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /videos/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    patch:
+      tags: [Studio]
+      summary: Edit details
+      description: |
+        Saves any of `title` (max 100), `description` (max 5000) and `visibility`, whatever the
+        Video's processing status. Text is trimmed and blank becomes null; a title equal to the
+        Upload's filename is stored as null. A result that is UNLISTED or PUBLIC must have both a
+        title and a description (400 otherwise), so clearing either on a non-private Video is
+        refused too.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 100 }
+                description: { type: string, maxLength: 5000 }
+                visibility: { $ref: "#/components/schemas/Visibility" }
+            example:
+              title: Holiday in Lisbon
+              description: Three days of tram rides and pastries.
+              visibility: PUBLIC
+      responses:
+        "200":
+          description: The saved details.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  video:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      title: { type: string, nullable: true }
+                      description: { type: string, nullable: true }
+                      visibility: { $ref: "#/components/schemas/Visibility" }
+              example:
+                video:
+                  id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
+                  title: Holiday in Lisbon
+                  description: Three days of tram rides and pastries.
+                  visibility: PUBLIC
+        "400":
+          description: Not a JSON object, a field too long or not text, an unknown visibility, or UNLISTED/PUBLIC without a title and description.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Add a title and a description before making a video unlisted or public. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Changed elsewhere meanwhile; reload and try again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [Studio]
+      summary: Delete a video
+      description: "Soft delete only (ADR 0001): the Video is flagged and vanishes everywhere, but no row or file is removed. Media addresses already issued keep working until they expire."
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /videos/{id}/thumbnail:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    put:
+      tags: [Studio]
+      summary: Replace the thumbnail
+      description: |
+        The body is the raw image (in Postman: Body, binary; set `Content-Type` to the image type),
+        not multipart and not an Upload. At most 5 MB. Only a `READY` Video.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        "200":
+          description: Replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  video:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      thumbnailPath: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: The thumbnail can be changed once the video has finished processing. }
+        "413":
+          description: Over 5 MB.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: That image is over 5 MB. }
+        "415":
+          description: Empty body, not an image, or an image that cannot be read.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /videos/{id}/retry:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    post:
+      tags: [Studio]
+      summary: Retry processing
+      description: Flips a `FAILED` Video back to `PROCESSING` and queues it again from the kept original.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "202":
+          description: Queued.
+          content:
+            application/json:
+              example: { msg: Processing started. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not FAILED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Only a failed video can be retried. }
+        "503":
+          description: Queueing failed; the Video is FAILED again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------- Watching
+  /videos/{id}/watch:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    get:
+      tags: [Watching]
+      summary: Watch a video
+      description: |
+        Open to anyone; a token, if sent, identifies you. A missing or deleted Video, or a PRIVATE
+        one to anyone but its owner, is 404. A Video that is not READY reports `PROCESSING` to
+        everyone but its owner (who also sees `FAILED`) and has no `playlistPath`. A READY one
+        returns `playlistPath`: an address under `/media/{token}/...` valid for 6 hours.
+      security: [{}, { cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The Video.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  video:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      title: { type: string, nullable: true }
+                      description: { type: string, nullable: true }
+                      status: { $ref: "#/components/schemas/Status" }
+                      channelName: { type: string }
+                      createdAt: { type: string, format: date-time }
+                      views: { type: integer }
+                      playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }
+              example:
+                video:
+                  id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
+                  title: Holiday in Lisbon
+                  description: Three days of tram rides and pastries.
+                  status: READY
+                  channelName: ada-lovelace
+                  createdAt: "2026-10-01T09:30:00.000Z"
+                  views: 12
+                  playlistPath: /api/v1/media/eyJhbGciOi.../master.m3u8
+        "404": { $ref: "#/components/responses/NotFound" }
+  /videos/{id}/views:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    post:
+      tags: [Watching]
+      summary: Count a view
+      description: |
+        The browser calls this after 30 seconds of playback (or at the end of a shorter Video).
+        One View per Viewer per Video per UTC day; the owner's own watching is never counted.
+        Anyone can call it, so a client can report falsely; there is no rate limit yet.
+      security: [{}, { cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Whether this call was counted, and the total.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  counted: { type: boolean }
+                  views: { type: integer }
+              example: { counted: true, views: 13 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: This video is not ready to be watched. }
+  /media/{token}/{path}:
+    get:
+      tags: [Watching]
+      summary: Fetch a playlist or media file
+      description: |
+        Normally followed by a player, not by hand: use the `playlistPath` from **Watch a video**
+        (everything after `/api/v1/media/` is `{token}/{path}`). The token names the Video and
+        lasts 6 hours; it cannot be revoked, so a Video made private stays playable through an
+        already-issued token until it expires. Playlists (`.m3u8`) are streamed by the API;
+        other files redirect (302) to a 5-minute signed storage address, or are streamed
+        when the store cannot sign (local disk).
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: path, in: path, required: true, schema: { type: string }, description: "For example `master.m3u8`, or a rendition's playlist or segment." }
+      responses:
+        "200": { description: "A playlist or file." }
+        "302": { description: "Redirect to a signed storage address." }
+        "404": { description: "Bad or expired token, or an unsafe or missing path." }
+
+  # -------------------------------------------------------------- Discovering
+  /videos:
+    get:
+      tags: [Discovering]
+      summary: Home page showcase
+      description: PUBLIC, READY, non-deleted Videos of every Channel, newest first, 24 per page. A missing or invalid `page` is 1. Page numbers are offsets, so a Video published meanwhile shifts later pages by one.
+      parameters:
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  videos:
+                    type: array
+                    items: { $ref: "#/components/schemas/ShowcaseVideo" }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
+              example:
+                videos:
+                  - id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
+                    title: Holiday in Lisbon
+                    createdAt: "2026-10-01T09:30:00.000Z"
+                    channelName: ada-lovelace
+                    thumbnailPath: /api/v1/media/eyJhbGciOi.../videos/7d3c0b9e/thumbnail.jpg
+                page: 1
+                hasMore: false
+    post:
+      tags: [Discovering]
+      summary: Create a video (stub)
+      description: Not implemented. Videos are created by finishing an upload. This route only answers a placeholder.
+      responses:
+        "200":
+          description: Placeholder.
+          content:
+            application/json:
+              example: { msg: Success }
+  /channels/{name}:
+    get:
+      tags: [Discovering]
+      summary: A channel's page
+      description: The Channel's PUBLIC, READY, non-deleted Videos, newest first. The name is matched regardless of case.
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, example: ada-lovelace }
+      responses:
+        "200":
+          description: The Channel and its Videos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel:
+                    type: object
+                    properties:
+                      name: { type: string }
+                  videos:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChannelVideo" }
+              example:
+                channel: { name: ada-lovelace }
+                videos:
+                  - id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
+                    title: Holiday in Lisbon
+                    createdAt: "2026-10-01T09:30:00.000Z"
+                    thumbnailPath: /api/v1/media/eyJhbGciOi.../videos/7d3c0b9e/thumbnail.jpg
+        "404":
+          description: Unknown Channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Channel not found. }
+
+  # ---------------------------------------------------------------- Internal
+  /webhooks/tusd:
+    post:
+      tags: [Internal]
+      summary: tusd hook receiver
+      description: |
+        Called by the tusd process, never by people. Always answers HTTP 200: tusd's hook protocol
+        refuses an upload with `RejectUpload: true` and an `HTTPResponse` in the body, not with a
+        non-2xx status. The hook is chosen by `Type`. Your token reaches it in the forwarded
+        `Authorization` or `Cookie` header inside `Event.HTTPRequest.Header`.
+
+        - `pre-create`: needs a valid token (401) and `filename` metadata (400).
+        - `post-create`: writes the Upload record (idempotent, tusd retries hooks).
+        - `pre-finish` and `post-finish`: only the owner may finish; `post-finish` creates the
+          private, processing Video exactly once and queues `process-video`. tusd still sends
+          `post-finish` after a refused `pre-finish`, so it checks again.
+        - `post-receive`, `post-terminate`: accepted without action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Type:
+                  type: string
+                  enum: [pre-create, post-create, post-receive, pre-finish, post-finish, post-terminate]
+                Event:
+                  type: object
+                  properties:
+                    Upload:
+                      type: object
+                      properties:
+                        ID: { type: string }
+                        Size: { type: integer }
+                        Offset: { type: integer }
+                        MetaData: { type: object, additionalProperties: { type: string } }
+                    HTTPRequest:
+                      type: object
+                      properties:
+                        Method: { type: string }
+                        URI: { type: string }
+                        Header: { type: object, additionalProperties: { type: array, items: { type: string } } }
+      responses:
+        "200":
+          description: "`{}` to let it proceed, or a rejection."
+          content:
+            application/json:
+              examples:
+                allowed:
+                  value: {}
+                rejected:
+                  value:
+                    RejectUpload: true
+                    HTTPResponse:
+                      StatusCode: 401
+                      Body: '{"message":"..."}'
