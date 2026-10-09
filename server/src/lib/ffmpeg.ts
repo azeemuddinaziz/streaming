@@ -3,7 +3,10 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-const run = promisify(execFile);
+const exec = promisify(execFile);
+// A hung ffmpeg must throw inside the job, so the Video can still be marked failed.
+const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const run = (command: string, args: string[]) => exec(command, args, { timeout: COMMAND_TIMEOUT_MS });
 
 export type RenditionFile = {
   width: number;
