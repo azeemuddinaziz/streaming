@@ -10,6 +10,25 @@ export class VideoRepository {
     });
   }
 
+  // One page of what anyone may see: ready, public, non-deleted Videos of every
+  // Channel, newest first. Asks for one extra row so the caller can tell if
+  // another page follows.
+  static async listPublic(skip: number, take: number) {
+    return await prisma.video.findMany({
+      where: { visibility: "PUBLIC", status: "READY", deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        thumbnailKey: true,
+        createdAt: true,
+        channel: { select: { user: { select: { name: true } } } },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take: take + 1,
+    });
+  }
+
   static async findForWatch(videoId: string) {
     return await prisma.video.findFirst({
       where: { id: videoId, deletedAt: null },

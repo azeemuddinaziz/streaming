@@ -2,8 +2,9 @@ import type { Request, Response } from "express";
 import { VideoService } from "../services/videos.service.ts";
 
 export const VideoController = {
+  // The home page showcase of public Videos.
   async get(req: Request, res: Response) {
-    res.status(200).json({ msg: "Success" });
+    res.status(200).json(await VideoService.listPublic(req.query.page));
   },
 
   async create(req: Request, res: Response) {
