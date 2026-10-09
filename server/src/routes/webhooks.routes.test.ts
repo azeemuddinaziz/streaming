@@ -1,9 +1,16 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../lib/prisma.ts";
 import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase, startTestApi } from "../test/helpers.ts";
+import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { signToken } from "../utils/jwt.ts";
+
+// The job queue is its own seam; here only what is asked of it matters.
+vi.mock("../lib/video-queue.ts", () => ({
+  PROCESS_VIDEO_JOB: "process-video",
+  queueVideoProcessing: vi.fn(async () => {}),
+}));
 
 let api: Awaited<ReturnType<typeof startTestApi>>;
 
@@ -16,6 +23,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  vi.mocked(queueVideoProcessing).mockClear();
   await resetDatabase();
 });
 
@@ -270,6 +278,36 @@ describe("tusd post-finish hook", () => {
     );
     const channel = await prisma.channel.findUniqueOrThrow({ where: { userId: user.id } });
     expect(upload.video!.channelId).toBe(channel.id);
+  });
+
+  it("queues processing of the new Video, once however many times tusd sends the hook", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    await Promise.all([finish(token), finish(token)]);
+    await finish(token);
+
+    const video = await prisma.video.findFirstOrThrow();
+    expect(queueVideoProcessing).toHaveBeenCalledTimes(1);
+    expect(queueVideoProcessing).toHaveBeenCalledWith(video.id);
+  });
+
+  it("marks the Video failed when processing cannot be queued, rather than leaving it processing", async () => {
+    vi.mocked(queueVideoProcessing).mockRejectedValueOnce(new Error("queue down"));
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    expect((await finish(token)).status).toBe(200);
+
+    expect((await prisma.video.findFirstOrThrow()).status).toBe("FAILED");
+  });
+
+  it("queues nothing for an Upload that cannot become a Video", async () => {
+    const { token } = await signedUp();
+
+    await finish(token, "nope");
+
+    expect(queueVideoProcessing).not.toHaveBeenCalled();
   });
 
   it("makes exactly one Video however many times tusd sends the hook", async () => {

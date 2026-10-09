@@ -1,4 +1,6 @@
 import { UploadRepository } from "../repositories/uploads.repository.ts";
+import { VideoRepository } from "../repositories/videos.repository.ts";
+import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import type {
   PostFinishResult,
@@ -95,7 +97,16 @@ export const TusdService = {
     const decision = await checkFinisher(upload, httpRequest);
     if (!decision.allowed) return { success: false };
 
-    await UploadRepository.completeIntoVideo(upload.ID);
+    const video = await UploadRepository.completeIntoVideo(upload.ID);
+    if (video) {
+      // A Video nobody will process must not wait forever.
+      try {
+        await queueVideoProcessing(video.id);
+      } catch (error) {
+        console.error(`Could not queue processing of video ${video.id}:`, error);
+        await VideoRepository.markFailed(video.id);
+      }
+    }
     return { success: true };
   },
 };

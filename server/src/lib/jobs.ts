@@ -2,7 +2,12 @@ import { PgBoss } from "pg-boss";
 
 export type JobState = "created" | "retry" | "active" | "completed" | "cancelled" | "failed";
 
-type JobHandler = (data: any) => Promise<void>;
+type JobAttempt = {
+  // True when the job will not be run again if this attempt fails.
+  final: boolean;
+};
+
+type JobHandler = (data: any, attempt: JobAttempt) => Promise<void>;
 
 type JobOptions = {
   // A cron expression (UTC). The worker queues the job whenever it comes due.
@@ -52,8 +57,8 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
       for (const [name, { handler, schedule }] of handlers) {
         await ensureQueue(name);
         if (work) {
-          await boss.work<object>(name, async ([job]) => {
-            await handler(job.data);
+          await boss.work<object, void, { includeMetadata: true }>(name, { includeMetadata: true }, async ([job]) => {
+            await handler(job.data, { final: job.retryCount >= job.retryLimit });
           });
           // Stored in the database, so starting the worker again updates it.
           if (schedule) await boss.schedule(name, schedule);
