@@ -61,6 +61,14 @@ export const VideoService = {
     }));
   },
 
+  // Deletes a Video for good: it is only flagged, and its rows and files stay
+  // (ADR 0001). Someone else's, a missing or an already deleted Video is not found.
+  async remove(userId: string, videoId: string) {
+    if (!(await VideoRepository.softDelete(videoId, userId))) {
+      throw new HttpError(404, "Video not found.");
+    }
+  },
+
   // Processes a failed Video again from its kept original. Someone else's Video
   // is reported as not found, the same as one that does not exist.
   async retryProcessing(userId: string, videoId: string) {

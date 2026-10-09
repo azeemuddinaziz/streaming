@@ -176,3 +176,48 @@ describe("signed media addresses", () => {
     expect((await api.request(`/media/${token}/missing.ts`)).status).toBe(404);
   });
 });
+
+describe("deleting a Video", () => {
+  const remove = (id: string, headers?: Record<string, string>) =>
+    api.request(`/videos/${id}`, { method: "DELETE", headers });
+
+  it("makes the Video gone for everyone, the owner included, but removes nothing", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await video(ada);
+
+    expect((await remove(id, ada.bearer)).status).toBe(204);
+
+    expect((await api.request(`/videos/${id}/watch`)).status).toBe(404);
+    expect((await api.request(`/videos/${id}/watch`, { headers: ada.bearer })).status).toBe(404);
+    const mine = await (await api.request("/videos/mine", { headers: ada.bearer })).json();
+    expect(mine.videos).toEqual([]);
+    const row = await prisma.video.findUniqueOrThrow({ where: { id } });
+    expect(row.deletedAt).not.toBeNull();
+    expect(files.size).toBeGreaterThan(0);
+  });
+
+  it("is owner-only: someone else's, a missing, an already deleted Video is not found", async () => {
+    const ada = await person("Ada-Lovelace");
+    const grace = await person("Grace-Hopper");
+    const id = await video(ada);
+
+    expect((await remove(id, grace.bearer)).status).toBe(404);
+    expect((await remove(id)).status).toBe(401);
+    expect((await remove("nope", ada.bearer)).status).toBe(404);
+    expect((await prisma.video.findUniqueOrThrow({ where: { id } })).deletedAt).toBeNull();
+
+    expect((await remove(id, ada.bearer)).status).toBe(204);
+    expect((await remove(id, ada.bearer)).status).toBe(404);
+  });
+
+  it("cannot be edited or retried afterwards", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await video(ada, { status: "FAILED" });
+    await remove(id, ada.bearer);
+
+    const edit = await api.request(`/videos/${id}`, { method: "PATCH", headers: ada.bearer, json: { title: "x" } });
+    const retry = await api.request(`/videos/${id}/retry`, { method: "POST", headers: ada.bearer });
+
+    expect([edit.status, retry.status]).toEqual([404, 404]);
+  });
+});
