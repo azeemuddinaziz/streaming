@@ -42,13 +42,13 @@ export function ThumbnailPicker({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           className="thumbnail"
-          src={`${process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl()}${path}`}
+          src={`${getApiBaseUrl()}${path}`}
           alt={`Thumbnail of ${label}`}
         />
       )}
-      <label className="button button-secondary">
+      <label className="button button-secondary file-button">
         {busy ? "Uploading…" : "Change thumbnail"}
-        <input type="file" accept="image/*" onChange={onChange} disabled={busy} hidden />
+        <input className="visually-hidden" type="file" accept="image/*" onChange={onChange} disabled={busy} />
       </label>
       <span className="hint" role="status">{message}</span>
     </div>

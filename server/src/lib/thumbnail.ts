@@ -11,8 +11,15 @@ export type ThumbnailFile = { name: string; contentType: string; bytes: Buffer }
 // undefined when the bytes are not an image sharp can read.
 export async function makeThumbnails(image: Buffer): Promise<ThumbnailFile[] | undefined> {
   try {
+    // A small file can still decode to a huge bitmap, so cap the pixels.
+    const input = sharp(image, { limitInputPixels: 40_000_000 });
+    // Only raster formats; SVG would be parsed by a vector renderer.
+    const { format } = await input.metadata();
+    if (!format || !["jpeg", "png", "webp", "gif", "avif", "heif", "tiff"].includes(format)) {
+      return undefined;
+    }
     // Orientation is applied so a phone photo is not stored sideways.
-    const source = sharp(image).rotate();
+    const source = input.rotate();
     const files: ThumbnailFile[] = [];
     for (const width of THUMBNAIL_WIDTHS) {
       const resized = source.clone().resize({ width, withoutEnlargement: true });

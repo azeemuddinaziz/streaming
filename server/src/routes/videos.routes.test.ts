@@ -328,6 +328,9 @@ describe("custom thumbnail", () => {
 
     const fake = await put(id, "not really a png", "image/png", ada.bearer);
     expect(fake.status).toBe(415);
+
+    const svg = await put(id, '<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9"/>', "image/svg+xml", ada.bearer);
+    expect(svg.status).toBe(415);
   });
 
   it("rejects an oversized image", async () => {

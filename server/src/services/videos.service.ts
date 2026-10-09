@@ -5,7 +5,7 @@ import path from "node:path";
 import { HttpError } from "../errors.ts";
 import { signMediaToken } from "../lib/media-token.ts";
 import { createStorage } from "../lib/storage.ts";
-import { THUMBNAIL_DEFAULT, THUMBNAIL_MAX_BYTES, makeThumbnails } from "../lib/thumbnail.ts";
+import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
@@ -86,7 +86,6 @@ export const VideoService = {
     if (!Buffer.isBuffer(body) || body.length === 0) {
       throw new HttpError(415, "Choose an image file (PNG, JPEG, WebP or similar).");
     }
-    if (body.length > THUMBNAIL_MAX_BYTES) throw new HttpError(413, "That image is over 5 MB.");
 
     const files = await makeThumbnails(body);
     if (!files) throw new HttpError(415, "That file is not an image we can read. Choose a PNG, JPEG or WebP.");
