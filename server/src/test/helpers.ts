@@ -17,7 +17,7 @@ export async function startTestApi() {
           ...(json === undefined ? {} : { "Content-Type": "application/json" }),
           ...headers,
         },
-        body: json === undefined ? undefined : JSON.stringify(json),
+        body: json === undefined ? rest.body : JSON.stringify(json),
       });
     },
     close: () => new Promise((resolve) => server.close(resolve)),

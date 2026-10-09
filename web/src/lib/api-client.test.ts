@@ -8,6 +8,7 @@ import {
   getStudioVideos,
   getUnfinishedUploads,
   getWatchVideo,
+  replaceThumbnail,
   retryVideo,
   signIn,
   signOut,
@@ -306,5 +307,39 @@ describe("deleteVideo", () => {
 
     await new Promise((resolve) => stub!.close(resolve));
     expect(await deleteVideo("v1", await startStubApi(404))).toEqual({ ok: false, message: "stub" });
+  });
+});
+
+describe("replaceThumbnail", () => {
+  const png = () => new File([new Uint8Array([1, 2, 3])], "cover.png", { type: "image/png" });
+
+  it("sends the image with the cookie and returns the new address", async () => {
+    let seen = "";
+    let type: string | undefined;
+    stub = createServer((req, res) => {
+      seen = `${req.method} ${req.url}`;
+      type = req.headers["content-type"];
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ video: { thumbnailPath: "/api/v1/media/t/x.jpg" } }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await replaceThumbnail("v1", png(), baseUrl)).toEqual({
+      ok: true,
+      thumbnailPath: "/api/v1/media/t/x.jpg",
+    });
+    expect(seen).toBe("PUT /api/v1/videos/v1/thumbnail");
+    expect(type).toBe("image/png");
+  });
+
+  it("refuses a non-image or oversized file without calling the API, and relays the API's message", async () => {
+    const text = new File(["hi"], "a.txt", { type: "text/plain" });
+    expect(await replaceThumbnail("v1", text, "http://127.0.0.1:1")).toMatchObject({ ok: false, message: expect.stringMatching(/image/) });
+
+    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" });
+    expect(await replaceThumbnail("v1", big, "http://127.0.0.1:1")).toMatchObject({ ok: false, message: expect.stringMatching(/5 MB/) });
+
+    expect(await replaceThumbnail("v1", png(), await startStubApi(415))).toEqual({ ok: false, message: "stub" });
   });
 });

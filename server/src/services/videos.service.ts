@@ -1,5 +1,11 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { HttpError } from "../errors.ts";
 import { signMediaToken } from "../lib/media-token.ts";
+import { createStorage } from "../lib/storage.ts";
+import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
@@ -14,6 +20,13 @@ function text(value: unknown, field: string, max: number) {
   const trimmed = value.trim();
   if (trimmed.length > max) throw new HttpError(400, `The ${field} can be at most ${max} characters.`);
   return trimmed === "" ? null : trimmed;
+}
+
+const storage = createStorage();
+
+// The API address a stored file of a Video is served from.
+async function mediaPath(videoId: string, key: string) {
+  return `/api/v1/media/${await signMediaToken(videoId)}/${key.slice(`videos/${videoId}/`.length)}`;
 }
 
 export const VideoService = {
@@ -50,7 +63,7 @@ export const VideoService = {
   async listStudio(userId: string) {
     const videos = await VideoRepository.listForUser(userId);
 
-    return videos.map((video) => ({
+    return await Promise.all(videos.map(async (video) => ({
       id: video.id,
       label: video.title ?? video.upload?.filename ?? "Untitled",
       title: video.title,
@@ -58,7 +71,42 @@ export const VideoService = {
       status: video.status,
       visibility: video.visibility,
       createdAt: video.createdAt,
-    }));
+      thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
+    })));
+  },
+
+  // Replaces a ready Video's Thumbnail with the owner's image, stored in every
+  // size and format under a fresh folder so old addresses never show stale bytes.
+  async replaceThumbnail(userId: string, videoId: string, body: unknown) {
+    const video = await VideoRepository.findOwned(videoId, userId);
+    if (!video) throw new HttpError(404, "Video not found.");
+    if (video.status !== "READY") {
+      throw new HttpError(409, "The thumbnail can be changed once the video has finished processing.");
+    }
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      throw new HttpError(415, "Choose an image file (PNG, JPEG, WebP or similar).");
+    }
+
+    const files = await makeThumbnails(body);
+    if (!files) throw new HttpError(415, "That file is not an image we can read. Choose a PNG, JPEG or WebP.");
+
+    const prefix = `videos/${videoId}/thumbnails/${randomUUID()}/`;
+    const workDir = await mkdtemp(path.join(tmpdir(), "streamsouk-thumb-"));
+    try {
+      for (const file of files) {
+        const local = path.join(workDir, file.name);
+        await writeFile(local, file.bytes);
+        await storage.put(prefix + file.name, local, file.contentType);
+      }
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+
+    const thumbnailKey = prefix + THUMBNAIL_DEFAULT;
+    if (!(await VideoRepository.setThumbnail(videoId, thumbnailKey))) {
+      throw new HttpError(404, "Video not found.");
+    }
+    return { id: videoId, thumbnailPath: await mediaPath(videoId, thumbnailKey) };
   },
 
   // Deletes a Video from everyone's view. It is only flagged, and its rows and

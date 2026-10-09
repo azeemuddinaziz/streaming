@@ -105,4 +105,13 @@ export class VideoRepository {
     });
     return claimed.count === 1;
   }
+
+  // Points a ready Video at a new Thumbnail. False if the Video is gone or not ready.
+  static async setThumbnail(videoId: string, thumbnailKey: string) {
+    const claimed = await prisma.video.updateMany({
+      where: { id: videoId, status: "READY", deletedAt: null },
+      data: { thumbnailKey },
+    });
+    return claimed.count === 1;
+  }
 }

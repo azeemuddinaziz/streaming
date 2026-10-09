@@ -7,6 +7,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
   ".ts": "video/mp2t",
   ".jpg": "image/jpeg",
+  ".webp": "image/webp",
 };
 
 // A storage address only needs to outlive one request; the player asks again
