@@ -21,6 +21,14 @@ export const VideoController = {
     res.status(200).json({ video });
   },
 
+  async view(req: Request, res: Response) {
+    const result = await VideoService.recordView(
+      { userId: req.user?.id, ip: req.ip, userAgent: req.get("user-agent") },
+      req.params.id as string,
+    );
+    res.status(200).json(result);
+  },
+
   async update(req: Request, res: Response) {
     const video = await VideoService.updateDetails(req.user!.id, req.params.id as string, req.body ?? {});
     res.status(200).json({ video });

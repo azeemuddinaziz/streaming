@@ -13,7 +13,10 @@ export class VideoRepository {
   static async findForWatch(videoId: string) {
     return await prisma.video.findFirst({
       where: { id: videoId, deletedAt: null },
-      include: { channel: { select: { userId: true, user: { select: { name: true } } } } },
+      include: {
+        channel: { select: { userId: true, user: { select: { name: true } } } },
+        _count: { select: { views: true } },
+      },
     });
   }
 
@@ -113,5 +116,19 @@ export class VideoRepository {
       data: { thumbnailKey },
     });
     return claimed.count === 1;
+  }
+
+  // Records a View unless this Viewer already has one for the Video on `day`.
+  // False when it was a repeat.
+  static async addView(videoId: string, viewerKey: string, day: string) {
+    const created = await prisma.view.createMany({
+      data: [{ videoId, viewerKey, day }],
+      skipDuplicates: true,
+    });
+    return created.count === 1;
+  }
+
+  static async countViews(videoId: string) {
+    return await prisma.view.count({ where: { videoId, video: { deletedAt: null } } });
   }
 }

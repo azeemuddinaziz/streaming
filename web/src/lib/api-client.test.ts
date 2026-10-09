@@ -9,6 +9,7 @@ import {
   getUnfinishedUploads,
   getWatchVideo,
   replaceThumbnail,
+  reportView,
   retryVideo,
   signIn,
   signOut,
@@ -341,5 +342,23 @@ describe("replaceThumbnail", () => {
     expect(await replaceThumbnail("v1", big, "http://127.0.0.1:1")).toMatchObject({ ok: false, message: expect.stringMatching(/5 MB/) });
 
     expect(await replaceThumbnail("v1", png(), await startStubApi(415))).toEqual({ ok: false, message: "stub" });
+  });
+});
+
+describe("reportView", () => {
+  it("posts to the Video's views address and reports whether the API accepted it", async () => {
+    let seen = "";
+    stub = createServer((req, res) => {
+      seen = `${req.method} ${req.url}`;
+      res.writeHead(200, { "Content-Type": "application/json" }).end("{}");
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await reportView("v1", baseUrl)).toBe(true);
+    expect(seen).toBe("POST /api/v1/videos/v1/views");
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await reportView("v1", await startStubApi(404))).toBe(false);
   });
 });

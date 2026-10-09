@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,6 +24,14 @@ function text(value: unknown, field: string, max: number) {
 
 const storage = createStorage();
 
+// Anonymous Viewers are told apart by a keyed hash of address and browser, so
+// the raw IP address is never stored and the hash cannot be reversed by
+// trying every address.
+function anonymousKey(ip: string | undefined, userAgent: string | undefined) {
+  const hash = createHmac("sha256", process.env.JWT_SECRET!).update(`${ip ?? ""}\n${userAgent ?? ""}`).digest("hex");
+  return `anon:${hash}`;
+}
+
 // The API address a stored file of a Video is served from.
 async function mediaPath(videoId: string, key: string) {
   return `/api/v1/media/${await signMediaToken(videoId)}/${key.slice(`videos/${videoId}/`.length)}`;
@@ -48,6 +56,7 @@ export const VideoService = {
       status,
       channelName: video.channel.user.name,
       createdAt: video.createdAt,
+      views: video._count.views,
     };
     if (status !== "READY" || !video.masterPlaylistKey) return base;
 
@@ -57,6 +66,31 @@ export const VideoService = {
       ...base,
       playlistPath: `/api/v1/media/${token}/${video.masterPlaylistKey.slice(prefix.length)}`,
     };
+  },
+
+  // Counts a View of a Video the Viewer can watch, once per Viewer per Video
+  // per UTC day. The owner's own watching never counts. The browser decides
+  // when playback has run long enough; the API cannot see playback.
+  async recordView(
+    viewer: { userId?: string; ip?: string; userAgent?: string },
+    videoId: string,
+    now = new Date(),
+  ) {
+    const video = await VideoRepository.findForWatch(videoId);
+    const isOwner = viewer.userId !== undefined && video?.channel.userId === viewer.userId;
+    if (!video || (video.visibility === "PRIVATE" && !isOwner)) {
+      throw new HttpError(404, "Video not found.");
+    }
+    if (video.status !== "READY") throw new HttpError(409, "This video is not ready to be watched.");
+
+    const counted =
+      !isOwner &&
+      (await VideoRepository.addView(
+        videoId,
+        viewer.userId ? `user:${viewer.userId}` : anonymousKey(viewer.ip, viewer.userAgent),
+        now.toISOString().slice(0, 10),
+      ));
+    return { counted, views: await VideoRepository.countViews(videoId) };
   },
 
   // A Video is labelled with its Upload's filename until it has a title.
