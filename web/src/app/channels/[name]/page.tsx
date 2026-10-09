@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
-import { getApiBaseUrl, getChannelPage } from "@/lib/api-client";
+import { VideoCard } from "@/components/VideoCard";
+import { getChannelPage } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +39,6 @@ export default async function ChannelPage({ params }: Props) {
     );
   }
 
-  // The browser reaches the API at the public address, not the server-side one.
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
-
   return (
     <section className="channel">
       <p className="eyebrow">Channel</p>
@@ -50,25 +48,9 @@ export default async function ChannelPage({ params }: Props) {
         <p>No public videos yet.</p>
       ) : (
         <ul className="channel-grid" aria-label={`Videos by ${result.channel.name}`}>
-          {result.videos.map((video) => {
-            const title = video.title ?? "Untitled video";
-            return (
-              <li key={video.id}>
-                <Link href={`/watch/${video.id}`} className="channel-video">
-                  {video.thumbnailPath ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="thumbnail" src={`${apiUrl}${video.thumbnailPath}`} alt="" loading="lazy" />
-                  ) : (
-                    <span className="thumbnail" aria-hidden="true" />
-                  )}
-                  <strong>{title}</strong>
-                  <span className="hint">
-                    {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+          {result.videos.map((video) => (
+            <VideoCard key={video.id} video={video} />
+          ))}
         </ul>
       )}
     </section>

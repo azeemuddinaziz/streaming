@@ -6,6 +6,7 @@ import {
   deleteVideo,
   getChannelPage,
   getCurrentUser,
+  getPublicVideos,
   getStudioVideos,
   getUnfinishedUploads,
   getWatchVideo,
@@ -382,5 +383,24 @@ describe("getChannelPage", () => {
     expect(await getChannelPage("x", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getChannelPage("x", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("getPublicVideos", () => {
+  it("asks for the page and returns the Videos, or reports failure", async () => {
+    let seen = "";
+    stub = createServer((req, res) => {
+      seen = req.url!;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ videos: [], page: 2, hasMore: false }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await getPublicVideos(2, baseUrl)).toEqual({ ok: true, videos: [], page: 2, hasMore: false });
+    expect(seen).toBe("/api/v1/videos?page=2");
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getPublicVideos(1, await startStubApi(500))).toEqual({ ok: false });
   });
 });

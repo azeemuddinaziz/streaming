@@ -32,7 +32,28 @@ function anonymousKey(ip: string | undefined, userAgent: string | undefined) {
   return `anon:${hash}`;
 }
 
+const SHOWCASE_PAGE_SIZE = 24;
+
 export const VideoService = {
+  // One page of the home page showcase. A page number that is not a whole
+  // number from 1 is the first page.
+  async listPublic(pageParam: unknown) {
+    const parsed = Number(pageParam);
+    const page = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+
+    const rows = await VideoRepository.listPublic((page - 1) * SHOWCASE_PAGE_SIZE, SHOWCASE_PAGE_SIZE);
+    const videos = await Promise.all(
+      rows.slice(0, SHOWCASE_PAGE_SIZE).map(async (video) => ({
+        id: video.id,
+        title: video.title,
+        createdAt: video.createdAt,
+        channelName: video.channel.user.name,
+        thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
+      })),
+    );
+    return { videos, page, hasMore: rows.length > SHOWCASE_PAGE_SIZE };
+  },
+
   // What the watch page needs. A private Video, like a missing one, is not
   // found for anyone but its owner. Anyone but the owner is told a Video that
   // is not ready is still processing; only a ready one gets playable addresses.

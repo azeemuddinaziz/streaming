@@ -335,3 +335,33 @@ export async function getChannelPage(
     return { ok: false, reason: "unavailable" };
   }
 }
+
+export type ShowcaseVideo = {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  channelName: string;
+  thumbnailPath: string | null;
+};
+
+export type ShowcaseResult =
+  | { ok: true; videos: ShowcaseVideo[]; page: number; hasMore: boolean }
+  | { ok: false };
+
+// For server components: one page of the home page's public Videos.
+export async function getPublicVideos(
+  page: number,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<ShowcaseResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos?page=${page}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false };
+
+    return { ok: true, ...(await response.json()) };
+  } catch {
+    return { ok: false };
+  }
+}
