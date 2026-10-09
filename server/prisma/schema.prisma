@@ -50,6 +50,9 @@ model Video {
   channel    Channel     @relation(fields: [channelId], references: [id])
   status     VideoStatus @default(PROCESSING)
   visibility Visibility  @default(PRIVATE)
+  // Set by the owner. Until then the Upload's filename is only a placeholder label.
+  title       String?
+  description String?
   createdAt  DateTime    @default(now())
   // The Upload this Video was made from, kept as a record of it.
   upload     Upload?

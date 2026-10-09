@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { VideoDetailsForm } from "@/components/VideoDetailsForm";
 import { RetryButton } from "@/components/RetryButton";
 import { getStudioVideos, getUnfinishedUploads } from "@/lib/api-client";
 
@@ -56,6 +57,7 @@ export default async function StudioPage() {
                 {STATUS_LABEL[video.status]} · {VISIBILITY_LABEL[video.visibility]}
               </span>
               {video.status === "FAILED" && <RetryButton videoId={video.id} />}
+              <VideoDetailsForm video={video} />
             </li>
           ))}
         </ul>

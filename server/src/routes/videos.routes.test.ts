@@ -64,6 +64,8 @@ describe("studio list", () => {
         {
           id: expect.any(String),
           label: "holiday.mp4",
+          title: null,
+          description: null,
           status: "PROCESSING",
           visibility: "PRIVATE",
           createdAt: expect.any(String),
@@ -155,5 +157,103 @@ describe("retrying failed processing", () => {
 
     expect(response.status).toBe(503);
     expect(await statusOf(id)).toBe("FAILED");
+  });
+});
+
+describe("editing title, description and Visibility", () => {
+  async function newVideo(owner: Awaited<ReturnType<typeof person>>, tusId = "a1") {
+    await uploaded(owner, tusId, "holiday.mp4");
+    return (await prisma.upload.findUniqueOrThrow({ where: { tusId } })).videoId!;
+  }
+
+  const patch = (id: string, json: unknown, headers?: Record<string, string>) =>
+    api.request(`/videos/${id}`, { method: "PATCH", headers, json });
+  const stored = (id: string) => prisma.video.findUniqueOrThrow({ where: { id } });
+
+  it("saves a title and description while the Video is still processing", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    const response = await patch(id, { title: "  Holiday ", description: "Two weeks away" }, ada.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await stored(id)).toMatchObject({
+      status: "PROCESSING",
+      title: "Holiday",
+      description: "Two weeks away",
+      visibility: "PRIVATE",
+    });
+  });
+
+  it("lets a Video leave private only with both a title and a description", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    for (const visibility of ["UNLISTED", "PUBLIC"]) {
+      expect((await patch(id, { visibility }, ada.bearer)).status).toBe(400);
+    }
+    await patch(id, { title: "Holiday" }, ada.bearer);
+    expect((await patch(id, { visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
+    expect((await patch(id, { description: "   " }, ada.bearer)).status).toBe(200);
+    expect((await patch(id, { visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
+    expect((await stored(id)).visibility).toBe("PRIVATE");
+
+    const ok = await patch(id, { description: "Two weeks away", visibility: "UNLISTED" }, ada.bearer);
+    expect(ok.status).toBe(200);
+    expect((await stored(id)).visibility).toBe("UNLISTED");
+  });
+
+  it("does not let a non-private Video lose its title or description", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+    await patch(id, { title: "Holiday", description: "Away", visibility: "PUBLIC" }, ada.bearer);
+
+    expect((await patch(id, { title: "" }, ada.bearer)).status).toBe(400);
+    expect((await patch(id, { title: "", visibility: "PRIVATE" }, ada.bearer)).status).toBe(200);
+    expect((await stored(id)).title).toBeNull();
+  });
+
+  it("rejects values of the wrong shape", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    for (const body of [{ visibility: "SECRET" }, { title: 5 }, { title: "x".repeat(101) }, { description: "x".repeat(5001) }]) {
+      expect((await patch(id, body, ada.bearer)).status).toBe(400);
+    }
+  });
+
+  it("is owner-only: someone else's or a missing Video is not found, and a stranger is refused", async () => {
+    const ada = await person("Ada-Lovelace");
+    const grace = await person("Grace-Hopper");
+    const id = await newVideo(ada);
+
+    expect((await patch(id, { title: "Mine now" }, grace.bearer)).status).toBe(404);
+    expect((await patch("nope", { title: "x" }, ada.bearer)).status).toBe(404);
+    expect((await patch(id, { title: "x" })).status).toBe(401);
+    expect((await stored(id)).title).toBeNull();
+  });
+
+  it("labels the studio list with the title once there is one, not the filename", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+    await patch(id, { title: "Holiday", description: "Away" }, ada.bearer);
+
+    const body = await (await api.request("/videos/mine", { headers: ada.bearer })).json();
+
+    expect(body.videos[0]).toMatchObject({ label: "Holiday", title: "Holiday", description: "Away" });
+  });
+
+  it("rejects a body that is not an object", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    expect((await patch(id, ["x"], ada.bearer)).status).toBe(400);
+  });
+
+  it("treats a title equal to the filename as not set", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    expect((await patch(id, { title: "Holiday.MP4", description: "Away", visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
   });
 });

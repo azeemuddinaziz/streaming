@@ -236,7 +236,9 @@ a:hover {
   font-weight: 500;
 }
 
-.field input {
+.field input,
+.field textarea,
+.field select {
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius);
@@ -279,10 +281,15 @@ progress {
 
 .video-list li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
+}
+
+.video-details {
+  flex-basis: 100%;
 }

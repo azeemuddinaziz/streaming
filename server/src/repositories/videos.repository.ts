@@ -1,3 +1,4 @@
+import type { Visibility } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 
 export class VideoRepository {
@@ -54,7 +55,27 @@ export class VideoRepository {
   static async findOwned(videoId: string, userId: string) {
     return await prisma.video.findFirst({
       where: { id: videoId, channel: { userId } },
+      include: { upload: { select: { filename: true } } },
     });
+  }
+
+  // Writes details only if the Video still holds what the caller read, so two
+  // edits made at once cannot each pass a check the other undoes. False when
+  // the Video changed in between.
+  static async updateDetails(
+    before: { id: string; title: string | null; description: string | null; visibility: Visibility },
+    data: { title?: string | null; description?: string | null; visibility?: Visibility },
+  ) {
+    const claimed = await prisma.video.updateMany({
+      where: {
+        id: before.id,
+        title: before.title,
+        description: before.description,
+        visibility: before.visibility,
+      },
+      data,
+    });
+    return claimed.count === 1;
   }
 
   // Puts a failed Video back to processing. Only a failed Video changes, so of
