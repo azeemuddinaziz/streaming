@@ -243,10 +243,17 @@ describe("editing title, description and Visibility", () => {
     expect(body.videos[0]).toMatchObject({ label: "Holiday", title: "Holiday", description: "Away" });
   });
 
+  it("rejects a body that is not an object", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await newVideo(ada);
+
+    expect((await patch(id, ["x"], ada.bearer)).status).toBe(400);
+  });
+
   it("treats a title equal to the filename as not set", async () => {
     const ada = await person("Ada-Lovelace");
     const id = await newVideo(ada);
 
-    expect((await patch(id, { title: "holiday.mp4", description: "Away", visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
+    expect((await patch(id, { title: "Holiday.MP4", description: "Away", visibility: "PUBLIC" }, ada.bearer)).status).toBe(400);
   });
 });
