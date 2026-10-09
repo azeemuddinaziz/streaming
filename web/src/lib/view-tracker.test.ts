@@ -31,10 +31,19 @@ describe("view tracker", () => {
     expect(onQualify).not.toHaveBeenCalled();
   });
 
-  it("counts a Video shorter than 30 seconds when it ends, and a long one not at an early end", () => {
+  it("counts a Video shorter than 30 seconds that plays to its end, but not one skipped to the end", () => {
     const short = vi.fn();
-    createViewTracker(short).ended(12);
+    const tracker = createViewTracker(short);
+    play(tracker, 0, 11.75, 12);
+    tracker.ended(12);
     expect(short).toHaveBeenCalledTimes(1);
+
+    const skipped = vi.fn();
+    const skipper = createViewTracker(skipped);
+    skipper.tick(1, 12);
+    skipper.tick(11, 12);
+    skipper.ended(12);
+    expect(skipped).not.toHaveBeenCalled();
 
     const long = vi.fn();
     createViewTracker(long).ended(600);

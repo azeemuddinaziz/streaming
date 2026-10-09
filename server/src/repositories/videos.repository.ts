@@ -129,6 +129,6 @@ export class VideoRepository {
   }
 
   static async countViews(videoId: string) {
-    return await prisma.view.count({ where: { videoId } });
+    return await prisma.view.count({ where: { videoId, video: { deletedAt: null } } });
   }
 }

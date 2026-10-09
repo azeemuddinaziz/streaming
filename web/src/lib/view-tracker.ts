@@ -25,10 +25,11 @@ export function createViewTracker(onQualify: () => void) {
       last = currentTime;
       if (Number.isFinite(duration) && played >= Math.min(VIEW_AFTER_SECONDS, duration)) qualify();
     },
-    // Reaching the end of a Video counts only if it is short; a long Video
-    // still has to have been played for 30 seconds.
+    // Reaching the end counts for a short Video that was played through (the
+    // first step of a play is never measured, hence 90%, not all); skipping
+    // to its last seconds does not. A long Video still needs 30 seconds played.
     ended(duration: number) {
-      if (Number.isFinite(duration) && duration < VIEW_AFTER_SECONDS) qualify();
+      if (Number.isFinite(duration) && duration < VIEW_AFTER_SECONDS && played >= duration * 0.9) qualify();
     },
     // After pausing or seeking, the next tick has no previous position.
     interrupt() {
