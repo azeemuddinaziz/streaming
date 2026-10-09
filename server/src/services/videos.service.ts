@@ -39,7 +39,7 @@ export const VideoService = {
   // number from 1 is the first page.
   async listPublic(pageParam: unknown) {
     const parsed = Number(pageParam);
-    const page = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+    const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
 
     const rows = await VideoRepository.listPublic((page - 1) * SHOWCASE_PAGE_SIZE, SHOWCASE_PAGE_SIZE);
     const videos = await Promise.all(

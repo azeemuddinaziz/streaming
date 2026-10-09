@@ -97,7 +97,7 @@ describe("public showcase", () => {
   });
 
   it("treats a bad page number as the first page", async () => {
-    for (const page of ["0", "-3", "abc", "1.5"]) {
+    for (const page of ["0", "-3", "abc", "1.5", "1e21"]) {
       const body = await (await api.request(`/videos?page=${page}`)).json();
       expect(body.page).toBe(1);
     }

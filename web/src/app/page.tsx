@@ -10,7 +10,7 @@ type Props = { searchParams: Promise<{ page?: string }> };
 
 export default async function HomePage({ searchParams }: Props) {
   const parsed = Number((await searchParams).page);
-  const page = Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
+  const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
   const result = await getPublicVideos(page);
 
   return (

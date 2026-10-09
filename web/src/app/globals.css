@@ -145,35 +145,6 @@ a:hover {
   color: var(--color-muted);
 }
 
-.hero {
-  padding: 4rem 0;
-}
-
-.hero p {
-  max-width: 36rem;
-  color: var(--color-muted);
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.75rem;
-}
-
-.status::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--color-danger);
-}
-
-.status[data-healthy="true"]::before {
-  background: var(--color-success);
-}
-
 .account-nav {
   display: flex;
   align-items: center;
