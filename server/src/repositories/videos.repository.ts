@@ -50,4 +50,20 @@ export class VideoRepository {
       data: { status: "FAILED" },
     });
   }
+
+  static async findOwned(videoId: string, userId: string) {
+    return await prisma.video.findFirst({
+      where: { id: videoId, channel: { userId } },
+    });
+  }
+
+  // Puts a failed Video back to processing. Only a failed Video changes, so of
+  // two simultaneous retries exactly one wins.
+  static async restartProcessing(videoId: string) {
+    const claimed = await prisma.video.updateMany({
+      where: { id: videoId, status: "FAILED" },
+      data: { status: "PROCESSING" },
+    });
+    return claimed.count === 1;
+  }
 }
