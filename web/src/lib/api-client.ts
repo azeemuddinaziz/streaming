@@ -307,3 +307,31 @@ export async function reportView(id: string, baseUrl: string = getApiBaseUrl()):
     return false;
   }
 }
+
+export type ChannelPage = {
+  channel: { name: string };
+  videos: { id: string; title: string | null; createdAt: string; thumbnailPath: string | null }[];
+};
+
+export type ChannelResult =
+  | ({ ok: true } & ChannelPage)
+  | { ok: false; reason: "not-found" | "unavailable" };
+
+// For server components: loads a Channel's public page, found by account name.
+export async function getChannelPage(
+  name: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<ChannelResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(name)}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 404) return { ok: false, reason: "not-found" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    return { ok: true, ...(await response.json()) };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}

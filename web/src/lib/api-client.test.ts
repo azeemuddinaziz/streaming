@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   checkApiHealth,
   deleteVideo,
+  getChannelPage,
   getCurrentUser,
   getStudioVideos,
   getUnfinishedUploads,
@@ -360,5 +361,26 @@ describe("reportView", () => {
 
     await new Promise((resolve) => stub!.close(resolve));
     expect(await reportView("v1", await startStubApi(404))).toBe(false);
+  });
+});
+
+describe("getChannelPage", () => {
+  it("returns the Channel and its Videos, not-found for 404, unavailable otherwise", async () => {
+    let seen = "";
+    stub = createServer((req, res) => {
+      seen = req.url!;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ channel: { name: "Ada" }, videos: [] }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await getChannelPage("Ada", baseUrl)).toEqual({ ok: true, channel: { name: "Ada" }, videos: [] });
+    expect(seen).toBe("/api/v1/channels/Ada");
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getChannelPage("x", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getChannelPage("x", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
   });
 });
