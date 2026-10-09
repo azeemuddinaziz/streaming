@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "API",
+      "type": "shell",
+      "command": "pnpm --filter server dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "runOptions": { "runOn": "folderOpen" }
+    },
+    {
+      "label": "WEB",
+      "type": "shell",
+      "command": "pnpm --filter web dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "runOptions": { "runOn": "folderOpen" }
+    },
+    {
+      "label": "Tusd",
+      "type": "shell",
+      "command": "pnpm --filter server tusd",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "runOptions": { "runOn": "folderOpen" }
+    },
+    {
+      "label": "Worker",
+      "type": "shell",
+      "command": "pnpm --filter server worker",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "runOptions": { "runOn": "folderOpen" }
+    },
+    {
+      "label": "Prisma Studio",
+      "type": "shell",
+      "command": "pnpm --filter server studio",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    }
+  ]
+}
