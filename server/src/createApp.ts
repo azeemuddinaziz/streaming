@@ -21,7 +21,6 @@ const handleErrors: ErrorRequestHandler = (error, req, res, _next) => {
 
   enrich({
     errorName: error instanceof Error ? error.name : "NonError",
-    errorMessage: error instanceof Error ? error.message : String(error),
   });
   return res.status(500).json({ msg: "Something went wrong." });
 };
@@ -38,6 +37,7 @@ export function createApp() {
       origin: (origin, callback) =>
         callback(null, origin !== undefined && origin === process.env.WEB_ORIGIN),
       credentials: true,
+      exposedHeaders: ["X-Request-Id"],
     }),
   );
   app.use(express.json());

@@ -102,9 +102,10 @@ describe("wide events", () => {
       headers: { Authorization: "Bearer very-secret-bearer", Cookie: "token=very-secret-cookie" },
     });
     await api.request("/media/very-secret-media-token/720p/segment_000.ts");
+    await api.request("/MEDIA/very-secret-media-token/720p/segment_000.ts");
     await settle();
 
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     const logged = JSON.stringify(events);
     for (const secret of [
       "hunter2",

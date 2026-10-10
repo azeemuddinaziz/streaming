@@ -38,7 +38,7 @@ export function enrich(fields: WideEvent) {
 
 // The media address carries a credential as its first segment.
 function redactPath(path: string) {
-  return path.replace(/^(\/api\/v1\/media\/)[^/]+/, "$1:token");
+  return path.replace(/^(\/api\/v1\/media\/)[^/]+/i, "$1:token");
 }
 
 // The pattern is the mount point recorded by `mountAt` plus the route's own
