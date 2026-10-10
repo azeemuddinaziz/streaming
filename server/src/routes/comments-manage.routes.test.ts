@@ -105,6 +105,7 @@ describe("editing a Comment", () => {
     expect((await edit(id, "missing", grace, "x")).status).toBe(404);
     expect((await edit(id, gone.id, grace, "x")).status).toBe(404);
     expect((await edit(id, comment.id, null, "x")).status).toBe(401);
+    expect((await edit(id, comment.id, ada, "")).status).toBe(404);
     expect((await prisma.comment.findUniqueOrThrow({ where: { id: comment.id } })).body).toBe("mine");
   });
 });

@@ -52,6 +52,15 @@ function present(
   };
 }
 
+const commentNotFound = () => new HttpError(404, "Comment not found.");
+
+// The author's own live Comment; someone else's, a missing or a deleted one is not found.
+async function ownComment(videoId: string, commentId: string, authorId: string) {
+  const comment = await CommentRepository.findOwn(videoId, commentId, authorId);
+  if (!comment) throw commentNotFound();
+  return comment;
+}
+
 // Text of a Comment, as written or edited.
 function commentText(body: unknown) {
   if (typeof body !== "string") throw new HttpError(400, "The comment must be text.");
@@ -83,7 +92,7 @@ export const CommentService = {
     enrich({ commentAction: "replies", commentParentId: commentId });
     const { ownerId } = await commentableVideo(viewerId, videoId);
     if (!(await CommentRepository.findThread(videoId, commentId))) {
-      throw new HttpError(404, "Comment not found.");
+      throw commentNotFound();
     }
 
     const replies = (await CommentRepository.listReplies(commentId)).map((row) => present(row, ownerId, viewerId));
@@ -123,16 +132,18 @@ export const CommentService = {
   // Comment is not found. The earlier wording is not kept.
   async edit(authorId: string, videoId: string, commentId: string, body: unknown) {
     enrich({ commentAction: "edit", commentId });
-    const text = commentText(body);
     const { ownerId } = await commentableVideo(authorId, videoId);
-    const comment = await CommentRepository.findOwn(videoId, commentId, authorId);
-    if (!comment) throw new HttpError(404, "Comment not found.");
+    const comment = await ownComment(videoId, commentId, authorId);
+    // Someone else's Comment is not found whatever they send; only then is the text checked.
+    const text = commentText(body);
 
     // Saving the same words is not an edit.
     if (text !== comment.body && !(await CommentRepository.edit(commentId, authorId, text))) {
-      throw new HttpError(404, "Comment not found.");
+      throw commentNotFound();
     }
-    return present(await CommentRepository.findWithAuthor(commentId), ownerId, authorId);
+    const changed = await CommentRepository.findWithAuthor(commentId);
+    if (!changed || changed.deletedAt) throw commentNotFound();
+    return present(changed, ownerId, authorId);
   },
 
   // Deletes the author's own Comment. It is only flagged (ADR 0001). A Comment
@@ -140,9 +151,7 @@ export const CommentService = {
   async remove(authorId: string, videoId: string, commentId: string) {
     enrich({ commentAction: "delete", commentId });
     await commentableVideo(authorId, videoId);
-    const comment = await CommentRepository.findOwn(videoId, commentId, authorId);
-    if (!comment || !(await CommentRepository.softDelete(commentId, authorId))) {
-      throw new HttpError(404, "Comment not found.");
-    }
+    await ownComment(videoId, commentId, authorId);
+    if (!(await CommentRepository.softDelete(commentId, authorId))) throw commentNotFound();
   },
 };

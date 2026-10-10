@@ -49,6 +49,8 @@ export class CommentRepository {
   }
 
   // The author's own live Comment (editing and deleting are the author's alone).
+  // `hiddenAt` is deliberately not filtered: an author still sees a hidden Comment
+  // as normal and can change it (GLOSSARY, Hidden Comment).
   static async findOwn(videoId: string, commentId: string, authorId: string) {
     return await prisma.comment.findFirst({
       where: { id: commentId, videoId, authorId, deletedAt: null },
@@ -84,7 +86,7 @@ export class CommentRepository {
   }
 
   static async findWithAuthor(commentId: string) {
-    return await prisma.comment.findUniqueOrThrow({ where: { id: commentId }, include: withAuthor });
+    return await prisma.comment.findUnique({ where: { id: commentId }, include: withAuthor });
   }
 
   static async create(data: { videoId: string; authorId: string; parentId: string | null; body: string }) {
