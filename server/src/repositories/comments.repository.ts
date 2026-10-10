@@ -119,6 +119,19 @@ export class CommentRepository {
     return await prisma.comment.create({ data, include: withAuthor(data.authorId) });
   }
 
+  // Creation times of the author's newest Comments and Replies since `since`,
+  // newest first, on any Video. Deleted and hidden ones count: the limit is on
+  // writing, not on what is still shown.
+  static async recentByAuthor(authorId: string, since: Date, take: number) {
+    const rows = await prisma.comment.findMany({
+      where: { authorId, createdAt: { gt: since } },
+      select: { createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
+    return rows.map((row) => row.createdAt);
+  }
+
   // A live Comment of the Video, for the owner's moderation. Hidden or not.
   static async exists(videoId: string, commentId: string) {
     const found = await prisma.comment.findFirst({

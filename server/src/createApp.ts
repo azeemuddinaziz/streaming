@@ -22,7 +22,7 @@ export function createApp() {
       origin: (origin, callback) =>
         callback(null, origin !== undefined && origin === process.env.WEB_ORIGIN),
       credentials: true,
-      exposedHeaders: ["X-Request-Id"],
+      exposedHeaders: ["X-Request-Id", "Retry-After"],
     }),
   );
   app.use(express.json());

@@ -5,6 +5,9 @@ import { VideoRepository } from "../repositories/videos.repository.ts";
 
 const BODY_MAX = 1000;
 const PAGE_SIZE = 20;
+// A User may write this many Comments or Replies in any window of this length.
+const WRITE_LIMIT = 5;
+const WRITE_WINDOW_MS = 60_000;
 
 // The Video a person may read or write Comments on: one they can watch, once
 // it is ready. A private Video is only the owner's; like a missing or deleted
@@ -23,6 +26,21 @@ async function commentableVideo(viewerId: string | undefined, videoId: string) {
 // Writing and editing stop while the owner has Comments off.
 function requireCommentsOn(commentsEnabled: boolean) {
   if (!commentsEnabled) throw new HttpError(409, "Comments are turned off for this video.");
+}
+
+// Refuses a sixth write inside a minute, counted from the Comment table itself.
+// The caller is told to wait until the oldest of the counted writes leaves the
+// window. Two requests at the very same moment can both pass; that is accepted.
+async function limitWriting(authorId: string, now = Date.now()) {
+  const recent = await CommentRepository.recentByAuthor(authorId, new Date(now - WRITE_WINDOW_MS), WRITE_LIMIT);
+  if (recent.length < WRITE_LIMIT) return;
+
+  const frees = recent[WRITE_LIMIT - 1]!.getTime() + WRITE_WINDOW_MS;
+  const seconds = Math.min(Math.max(Math.ceil((frees - now) / 1000), 1), WRITE_WINDOW_MS / 1000);
+  enrich({ rateLimited: true });
+  throw new HttpError(429, "You are commenting too fast. Slow down and try again shortly.", {
+    "Retry-After": String(seconds),
+  });
 }
 
 // A deleted Comment still listed is a placeholder: it keeps its place and
@@ -135,6 +153,8 @@ export const CommentService = {
       enrich({ commentParentId: topLevelId });
     }
 
+    // Last, so a request that would fail anyway is told why, not to slow down.
+    await limitWriting(authorId);
     const comment = await CommentRepository.create({ videoId, authorId, parentId: topLevelId, body: text });
     enrich({ commentId: comment.id });
     return present(comment, ownerId, authorId);

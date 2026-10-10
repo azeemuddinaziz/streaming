@@ -146,4 +146,6 @@ model Comment {
 
   @@index([videoId, parentId, createdAt])
   @@index([parentId, createdAt])
+  // For the per-User rate limit, which counts an author's recent Comments.
+  @@index([authorId, createdAt])
 }

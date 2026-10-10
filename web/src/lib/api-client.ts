@@ -436,7 +436,8 @@ export async function getReplies(
   }
 }
 
-// Writes a Comment, or a Reply when `parentId` is given. Called from the browser.
+// Writes a Comment, or a Reply when `parentId` is given. Over the limit (429)
+// the message says how long to wait. Called from the browser.
 export async function postComment(
   videoId: string,
   input: { body: string; parentId?: string },
@@ -451,6 +452,16 @@ export async function postComment(
     });
     const body = await response.json().catch(() => ({}));
     if (response.ok && body.comment) return { ok: true, comment: body.comment };
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get("Retry-After"));
+      return {
+        ok: false,
+        message:
+          Number.isFinite(seconds) && seconds > 0
+            ? `Slow down: you can post again in ${seconds} ${seconds === 1 ? "second" : "seconds"}. Your text is kept.`
+            : "Slow down: you are commenting too fast. Your text is kept.",
+      };
+    }
     return { ok: false, message: body.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };
