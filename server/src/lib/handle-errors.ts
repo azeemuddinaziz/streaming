@@ -19,7 +19,7 @@ export const handleErrors: ErrorRequestHandler = (error, _req, res, _next) => {
 
   if (error instanceof HttpError) {
     describe(true);
-    return res.status(error.status).json({ msg: error.message });
+    return res.status(error.status).set(error.headers).json({ msg: error.message });
   }
 
   if ((error as { type?: string }).type === "entity.too.large") {

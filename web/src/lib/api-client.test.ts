@@ -519,3 +519,18 @@ describe("hiding Comments", () => {
     expect(await getHiddenComments("v1", 1, missing)).toEqual({ ok: false, message: "stub" });
   });
 });
+
+describe("postComment over the rate limit", () => {
+  it("tells the person how long to wait, and keeps nothing else to do", async () => {
+    stub = createServer((_req, res) => {
+      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "12" });
+      res.end(JSON.stringify({ msg: "You are commenting too fast." }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    const result = await postComment("v1", { body: "hi" }, baseUrl);
+    expect(result).toMatchObject({ ok: false });
+    expect(result.ok === false && result.message).toMatch(/12 seconds/);
+  });
+});

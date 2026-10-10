@@ -688,6 +688,10 @@ paths:
         Reply; answering a Reply attaches to the same top-level Comment. The target must be a
         visible Comment of this Video, else 409. Same Video rules as listing; a PRIVATE Video takes
         Comments only from its owner. 409 too while the owner has Comments off.
+
+        Rate limit: at most 5 Comments or Replies per User per minute, on any Video, counted from the
+        Comment table (deleted and hidden ones count). The sixth is 429 with a `Retry-After` header
+        (seconds). Checked last, so a request that would fail anyway reports its own error.
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       requestBody:
         required: true
@@ -717,6 +721,16 @@ paths:
               example: { msg: Write something before posting. }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429":
+          description: Five Comments or Replies already written in the last minute.
+          headers:
+            Retry-After:
+              description: Seconds until another may be written.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: You are commenting too fast. Slow down and try again shortly. }
         "409":
           description: The Video is not READY or has Comments off, or the Comment to answer is missing, deleted or hidden.
           content:
