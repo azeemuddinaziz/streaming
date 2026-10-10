@@ -43,3 +43,19 @@ _Avoid_: Poster, cover
 **View**:
 One counted watch of a Video, registered once playback has run for 30 seconds, or for the whole Video if it is shorter. A signed-in User counts once per Video per day, an anonymous Viewer once per Video per day, and the owner's own watching never counts.
 _Avoid_: Play, hit, impression
+
+**Comment**:
+Plain text written by a signed-in User on a Video they are allowed to watch, once that Video is ready. Its author can edit it at any time, which marks it as edited; earlier wording is not kept. The author can also delete it. A deleted Comment that has Replies stays as an empty placeholder so the Replies keep their context; one without Replies disappears. Nothing is ever removed from the system's own records. A Video's Comments are hidden from everyone while it is private (except from its owner) or deleted.
+_Avoid_: Post, message, review
+
+**Reply**:
+A Comment written in answer to another Comment. Conversations go one level deep: answering a Reply attaches to the same top-level Comment. A Hidden Comment, a deleted placeholder, and a hidden or deleted Reply cannot be answered.
+_Avoid_: Thread, child comment, sub-comment
+
+**Hidden Comment**:
+A Comment, or Reply, that a Video's owner has hidden. Hiding is the owner's only moderation action; it is not deletion, and the owner can undo it. The owner sees it in a separate hidden list. To everyone else it is gone, except to its own author, who still sees it as normal and is not told. Hiding a Comment hides its Replies with it. Only an author can delete a Comment, and an author's deletion is real deletion, not hiding.
+_Avoid_: Removed, banned, flagged
+
+**Comments off**:
+A setting on a Video, on by default, with which its owner stops new Comments and edits on it and hides the existing ones from everyone but the owner. Nothing is lost: turning Comments back on restores them.
+_Avoid_: Disabled comments, locked
