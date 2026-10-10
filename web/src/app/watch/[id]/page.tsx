@@ -79,12 +79,20 @@ export default async function WatchPage({ params }: Props) {
         {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
       {video.description && <p className="description">{video.description}</p>}
-      {video.status === "READY" && (
+      {video.status === "READY" && !video.commentsEnabled && (
+        <p className="notice" role="status">
+          {video.isOwner
+            ? "Comments are turned off for this video. Only you can see the existing ones. Turn them back on in your studio."
+            : "Comments are turned off for this video."}
+        </p>
+      )}
+      {video.status === "READY" && (video.commentsEnabled || video.isOwner) && (
         <CommentSection
           videoId={video.id}
-          initialCount={video.comments}
+          initialCount={video.comments ?? 0}
           signedIn={signedIn}
           isOwner={video.isOwner}
+          commentsEnabled={video.commentsEnabled}
         />
       )}
     </section>

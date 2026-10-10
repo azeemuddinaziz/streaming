@@ -18,6 +18,7 @@ export function VideoDetailsForm({ video }: { video: StudioVideo }) {
       title: String(data.get("title")),
       description: String(data.get("description")),
       visibility: String(data.get("visibility")) as StudioVideo["visibility"],
+      commentsEnabled: data.get("commentsEnabled") === "on",
     });
     setBusy(false);
     if (result.ok) {
@@ -62,6 +63,21 @@ export function VideoDetailsForm({ video }: { video: StudioVideo }) {
           </select>
           <p className="hint">
             Unlisted and public need both a title and a description.
+          </p>
+        </div>
+        <div className="field">
+          <label htmlFor={`comments-${video.id}`}>
+            <input
+              id={`comments-${video.id}`}
+              name="commentsEnabled"
+              type="checkbox"
+              defaultChecked={video.commentsEnabled}
+            />{" "}
+            Allow comments
+          </label>
+          <p className="hint">
+            Turned off, viewers see no comments and nobody can write or edit one. Nothing is deleted; turn it
+            back on to restore them.
           </p>
         </div>
         <button className="button" type="submit" disabled={busy}>

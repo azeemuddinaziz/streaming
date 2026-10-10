@@ -15,7 +15,14 @@ import {
   type Comment,
 } from "@/lib/api-client";
 
-type Props = { videoId: string; initialCount: number; signedIn: boolean; isOwner: boolean };
+type Props = {
+  videoId: string;
+  initialCount: number;
+  signedIn: boolean;
+  isOwner: boolean;
+  // Off: the owner can read, hide and delete, but nobody can write or edit.
+  commentsEnabled: boolean;
+};
 
 // One Comment or Reply. The text is rendered as a React text node, so markup
 // and links in it are shown as written and never become elements. The author
@@ -26,6 +33,7 @@ function CommentView({
   onChanged,
   onDeleted,
   onHidden,
+  canEdit = true,
   children,
 }: {
   videoId: string;
@@ -34,6 +42,8 @@ function CommentView({
   onDeleted: () => void;
   // Given only to the Video's owner: shows Hide on a Comment that is not hidden.
   onHidden?: () => void;
+  // False while Comments are off: the author can still delete, not edit.
+  canEdit?: boolean;
   children?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
@@ -137,17 +147,19 @@ function CommentView({
         <div className="comment-actions">
           {comment.isAuthor && (
             <>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  setText(comment.body ?? "");
-                  setSaved(false);
-                  setEditing(true);
-                }}
-              >
-                Edit
-              </button>
+              {canEdit && (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => {
+                    setText(comment.body ?? "");
+                    setSaved(false);
+                    setEditing(true);
+                  }}
+                >
+                  Edit
+                </button>
+              )}
               <button className="button button-secondary" type="button" onClick={remove} disabled={busy}>
                 Delete
               </button>
@@ -238,7 +250,8 @@ function CommentForm({
 function Replies({
   videoId,
   comment,
-  signedIn,
+  canWrite,
+  canEdit,
   isOwner,
   onPosted,
   onReplyDeleted,
@@ -246,7 +259,9 @@ function Replies({
 }: {
   videoId: string;
   comment: Comment;
-  signedIn: boolean;
+  // Signed in, with Comments on: the Reply buttons show.
+  canWrite: boolean;
+  canEdit: boolean;
   isOwner: boolean;
   onPosted: () => void;
   onReplyDeleted: () => void;
@@ -282,7 +297,7 @@ function Replies({
             {open ? "Hide" : "Show"} {comment.replyCount} {comment.replyCount === 1 ? "reply" : "replies"}
           </button>
         )}
-        {signedIn && !comment.deleted && answering === undefined && (
+        {canWrite && !comment.deleted && answering === undefined && (
           <button
             className="button button-secondary"
             type="button"
@@ -315,6 +330,7 @@ function Replies({
                 setReplies((current) => current?.filter((item) => item.id !== reply.id));
                 onReplyDeleted();
               }}
+              canEdit={canEdit}
               onHidden={
                 isOwner
                   ? () => {
@@ -324,7 +340,7 @@ function Replies({
                   : undefined
               }
             >
-              {signedIn && !comment.deleted && (
+              {canWrite && !comment.deleted && (
                 <button
                   className="button button-secondary"
                   type="button"
@@ -356,7 +372,9 @@ function Replies({
   );
 }
 
-export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Props) {
+export function CommentSection({ videoId, initialCount, signedIn, isOwner, commentsEnabled }: Props) {
+  // Replying is writing, so it goes with the form.
+  const canWrite = signedIn && commentsEnabled;
   const router = useRouter();
   const [count, setCount] = useState(initialCount);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -481,6 +499,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Pro
               key={comment.id}
               videoId={videoId}
               comment={comment}
+              canEdit={commentsEnabled}
               onChanged={(changed) =>
                 setHidden((current) => current.map((item) => (item.id === changed.id ? changed : item)))
               }
@@ -506,7 +525,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Pro
         </div>
       ) : (
         <>
-      {signedIn ? (
+      {!commentsEnabled ? null : signedIn ? (
         <CommentForm
           videoId={videoId}
           label="Add a comment"
@@ -545,6 +564,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Pro
                 current.map((item) => (item.id === changed.id ? { ...changed, replyCount: item.replyCount } : item)),
               )
             }
+            canEdit={commentsEnabled}
             onHidden={isOwner ? moderated : undefined}
             onDeleted={() => {
               setCount((current) => current - 1);
@@ -559,7 +579,8 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Pro
             <Replies
               videoId={videoId}
               comment={comment}
-              signedIn={signedIn}
+              canWrite={canWrite}
+              canEdit={commentsEnabled}
               isOwner={isOwner}
               onReplyHidden={moderated}
               onPosted={() => {
