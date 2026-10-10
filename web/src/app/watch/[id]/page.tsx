@@ -80,7 +80,12 @@ export default async function WatchPage({ params }: Props) {
       </p>
       {video.description && <p className="description">{video.description}</p>}
       {video.status === "READY" && (
-        <CommentSection videoId={video.id} initialCount={video.comments} signedIn={signedIn} />
+        <CommentSection
+          videoId={video.id}
+          initialCount={video.comments}
+          signedIn={signedIn}
+          isOwner={video.isOwner}
+        />
       )}
     </section>
   );

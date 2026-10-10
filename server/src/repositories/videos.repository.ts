@@ -1,6 +1,6 @@
 import type { Visibility } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
-import { visibleComments } from "./comments.repository.ts";
+import { countedComments } from "./comments.repository.ts";
 
 export class VideoRepository {
   static async listForUser(userId: string) {
@@ -36,7 +36,7 @@ export class VideoRepository {
       include: {
         channel: { select: { userId: true, user: { select: { name: true } } } },
         _count: {
-          select: { views: true, comments: { where: visibleComments } },
+          select: { views: true, comments: { where: countedComments } },
         },
       },
     });

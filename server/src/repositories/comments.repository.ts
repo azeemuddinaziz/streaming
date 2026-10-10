@@ -1,49 +1,74 @@
 import type { Prisma } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 
-// A Comment that has been deleted or hidden is not shown to Viewers. Later
-// tickets decide who still sees it; until then every read leaves it out.
-export const visibleComments = { deletedAt: null, hiddenAt: null } as const;
-
-// A top-level Comment is listed while it is live, or, once deleted, as a
-// placeholder for as long as it still has a visible Reply.
-const shownTopLevel: Prisma.CommentWhereInput = {
+// What counts as a Comment on a Video for anyone: not deleted, not hidden, and
+// not a Reply under a hidden Comment. A deleted parent does not matter, since
+// its Replies stay. Hiding a Comment hides its Replies with it, so a Reply
+// carries no flag of its own for that.
+export const countedComments: Prisma.CommentWhereInput = {
+  deletedAt: null,
   hiddenAt: null,
-  OR: [{ deletedAt: null }, { replies: { some: visibleComments } }],
+  OR: [{ parentId: null }, { parent: { hiddenAt: null } }],
 };
 
-const withAuthor = {
-  author: { select: { name: true } },
-  _count: { select: { replies: { where: visibleComments } } },
-} as const;
+// A Reply the viewer can see: not deleted, and either showing to everyone, or
+// theirs, or answering their own (hidden) Comment and not hidden on its own.
+// The author of a hidden Comment is not told, so their thread looks as before.
+function replyFilter(viewerId: string | undefined): Prisma.CommentWhereInput {
+  return {
+    deletedAt: null,
+    OR: [
+      { hiddenAt: null, parent: { hiddenAt: null } },
+      ...(viewerId ? [{ authorId: viewerId }, { hiddenAt: null, parent: { authorId: viewerId } }] : []),
+    ],
+  };
+}
+
+// A top-level Comment the viewer can see: not hidden, or their own. Once
+// deleted it is listed as a placeholder for as long as a Reply is visible.
+function topLevelFilter(viewerId: string | undefined): Prisma.CommentWhereInput {
+  return {
+    AND: [
+      { OR: [{ hiddenAt: null }, ...(viewerId ? [{ authorId: viewerId }] : [])] },
+      { OR: [{ deletedAt: null }, { replies: { some: replyFilter(viewerId) } }] },
+    ],
+  };
+}
+
+function withAuthor(viewerId: string | undefined) {
+  return {
+    author: { select: { name: true } },
+    _count: { select: { replies: { where: replyFilter(viewerId) } } },
+  } as const;
+}
 
 export class CommentRepository {
   // One page of a Video's top-level Comments, newest first. Asks for one extra
   // row so the caller can tell if another page follows.
-  static async listTopLevel(videoId: string, skip: number, take: number) {
+  static async listTopLevel(videoId: string, viewerId: string | undefined, skip: number, take: number) {
     return await prisma.comment.findMany({
-      where: { videoId, parentId: null, ...shownTopLevel },
-      include: withAuthor,
+      where: { videoId, parentId: null, ...topLevelFilter(viewerId) },
+      include: withAuthor(viewerId),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take: take + 1,
     });
   }
 
-  // All visible Replies to a top-level Comment, oldest first.
-  static async listReplies(parentId: string) {
+  // The Replies to a top-level Comment the viewer can see, oldest first.
+  static async listReplies(parentId: string, viewerId: string | undefined) {
     return await prisma.comment.findMany({
-      where: { parentId, ...visibleComments },
-      include: withAuthor,
+      where: { parentId, ...replyFilter(viewerId) },
+      include: withAuthor(viewerId),
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
   }
 
-  // A top-level Comment whose thread can be read: live, or a placeholder that
-  // still has a visible Reply.
-  static async findThread(videoId: string, commentId: string) {
+  // A top-level Comment whose thread the viewer can read: live, or a placeholder
+  // that still has a Reply they can see.
+  static async findThread(videoId: string, commentId: string, viewerId: string | undefined) {
     return await prisma.comment.findFirst({
-      where: { id: commentId, videoId, parentId: null, ...shownTopLevel },
+      where: { id: commentId, videoId, parentId: null, ...topLevelFilter(viewerId) },
       select: { id: true },
     });
   }
@@ -54,7 +79,7 @@ export class CommentRepository {
   static async findOwn(videoId: string, commentId: string, authorId: string) {
     return await prisma.comment.findFirst({
       where: { id: commentId, videoId, authorId, deletedAt: null },
-      include: withAuthor,
+      include: withAuthor(authorId),
     });
   }
 
@@ -77,19 +102,54 @@ export class CommentRepository {
     return claimed.count === 1;
   }
 
-  // A visible Comment of the Video, with its own parent's visibility.
+  // A Comment of the Video that is neither deleted nor hidden, with its own
+  // parent's state. This is who can be answered, whoever asks.
   static async findVisible(videoId: string, commentId: string) {
     return await prisma.comment.findFirst({
-      where: { id: commentId, videoId, ...visibleComments },
+      where: { id: commentId, videoId, deletedAt: null, hiddenAt: null },
       include: { parent: { select: { id: true, deletedAt: true, hiddenAt: true } } },
     });
   }
 
-  static async findWithAuthor(commentId: string) {
-    return await prisma.comment.findUnique({ where: { id: commentId }, include: withAuthor });
+  static async findWithAuthor(commentId: string, viewerId: string) {
+    return await prisma.comment.findUnique({ where: { id: commentId }, include: withAuthor(viewerId) });
   }
 
   static async create(data: { videoId: string; authorId: string; parentId: string | null; body: string }) {
-    return await prisma.comment.create({ data, include: withAuthor });
+    return await prisma.comment.create({ data, include: withAuthor(data.authorId) });
+  }
+
+  // A live Comment of the Video, for the owner's moderation. Hidden or not.
+  static async exists(videoId: string, commentId: string) {
+    const found = await prisma.comment.findFirst({
+      where: { id: commentId, videoId, deletedAt: null },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
+  // Hides or un-hides a Comment. Doing it twice changes nothing. Hiding a
+  // Comment does not touch its Replies' own flags, so un-hiding restores them
+  // except those hidden on their own.
+  static async setHidden(commentId: string, hidden: boolean) {
+    await prisma.comment.updateMany({
+      where: { id: commentId, deletedAt: null, hiddenAt: hidden ? null : { not: null } },
+      data: { hiddenAt: hidden ? new Date() : null },
+    });
+  }
+
+  // One page of the Comments and Replies the owner hid themselves, newest first.
+  static async listHidden(videoId: string, ownerId: string, skip: number, take: number) {
+    return await prisma.comment.findMany({
+      where: { videoId, deletedAt: null, hiddenAt: { not: null } },
+      include: withAuthor(ownerId),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take: take + 1,
+    });
+  }
+
+  static async countHidden(videoId: string) {
+    return await prisma.comment.count({ where: { videoId, deletedAt: null, hiddenAt: { not: null } } });
   }
 }

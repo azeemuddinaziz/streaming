@@ -8,6 +8,8 @@ import {
   deleteComment,
   editComment,
   getComments,
+  getHiddenComments,
+  setCommentHidden,
   getReplies,
   postComment,
   getCurrentUser,
@@ -482,5 +484,38 @@ describe("editing and deleting a Comment", () => {
     const missing = await startStubApi(404);
     expect(await editComment("v1", "c1", "x", missing)).toEqual({ ok: false, message: "stub" });
     expect(await deleteComment("v1", "c1", missing)).toEqual({ ok: false, message: "stub" });
+  });
+});
+
+describe("hiding Comments", () => {
+  it("posts hide and unhide and reads a page of the hidden list", async () => {
+    const seen: string[] = [];
+    stub = createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      if (req.method === "POST") return res.writeHead(204).end();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ comments: [{ id: "c1" }], hasMore: false, total: 1 }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await setCommentHidden("v1", "c1", true, baseUrl)).toEqual({ ok: true });
+    expect(await setCommentHidden("v1", "c1", false, baseUrl)).toEqual({ ok: true });
+    expect(await getHiddenComments("v1", 2, baseUrl)).toEqual({
+      ok: true,
+      comments: [{ id: "c1" }],
+      hasMore: false,
+      total: 1,
+    });
+    expect(seen).toEqual([
+      "POST /api/v1/videos/v1/comments/c1/hide",
+      "POST /api/v1/videos/v1/comments/c1/unhide",
+      "GET /api/v1/videos/v1/comments/hidden?page=2",
+    ]);
+
+    await new Promise((resolve) => stub!.close(resolve));
+    const missing = await startStubApi(404);
+    expect(await setCommentHidden("v1", "c1", true, missing)).toEqual({ ok: false, message: "stub" });
+    expect(await getHiddenComments("v1", 1, missing)).toEqual({ ok: false, message: "stub" });
   });
 });

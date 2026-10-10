@@ -9,6 +9,9 @@ const router = Router();
 router.get("/mine", AuthenticationMiddleware.verifyToken, VideoController.mine);
 router.get("/:id/watch", OptionalAuthenticationMiddleware.identify, VideoController.watch);
 router.post("/:id/views", OptionalAuthenticationMiddleware.identify, VideoController.view);
+router.get("/:id/comments/hidden", AuthenticationMiddleware.verifyToken, CommentController.hidden);
+router.post("/:id/comments/:commentId/hide", AuthenticationMiddleware.verifyToken, CommentController.hide);
+router.post("/:id/comments/:commentId/unhide", AuthenticationMiddleware.verifyToken, CommentController.unhide);
 router.get("/:id/comments", OptionalAuthenticationMiddleware.identify, CommentController.list);
 router.get(
   "/:id/comments/:commentId/replies",

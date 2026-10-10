@@ -35,4 +35,18 @@ export const CommentController = {
     await CommentService.remove(req.user!.id, req.params.id as string, req.params.commentId as string);
     res.status(204).end();
   },
+
+  async hidden(req: Request, res: Response) {
+    res.status(200).json(await CommentService.listHidden(req.user!.id, req.params.id as string, req.query.page));
+  },
+
+  async hide(req: Request, res: Response) {
+    await CommentService.setHidden(req.user!.id, req.params.id as string, req.params.commentId as string, true);
+    res.status(204).end();
+  },
+
+  async unhide(req: Request, res: Response) {
+    await CommentService.setHidden(req.user!.id, req.params.id as string, req.params.commentId as string, false);
+    res.status(204).end();
+  },
 };

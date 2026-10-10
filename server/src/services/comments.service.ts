@@ -17,7 +17,7 @@ async function commentableVideo(viewerId: string | undefined, videoId: string) {
     throw new HttpError(404, "Video not found.");
   }
   if (video.status !== "READY") throw new HttpError(409, "This video is not ready for comments.");
-  return { ownerId: video.channel.userId };
+  return { ownerId: video.channel.userId, isOwner };
 }
 
 // A deleted Comment still listed is a placeholder: it keeps its place and
@@ -30,6 +30,7 @@ function present(
     createdAt: Date;
     editedAt: Date | null;
     deletedAt: Date | null;
+    hiddenAt: Date | null;
     authorId: string;
     author: { name: string };
     _count: { replies: number };
@@ -47,6 +48,8 @@ function present(
     isAuthor: !deleted && viewerId !== undefined && comment.authorId === viewerId,
     deleted,
     edited: !deleted && comment.editedAt !== null,
+    // Only the owner is told: an author never learns their Comment was hidden.
+    hidden: !deleted && viewerId === ownerId && comment.hiddenAt !== null,
     createdAt: comment.createdAt,
     replyCount: comment._count.replies,
   };
@@ -81,7 +84,7 @@ export const CommentService = {
     const parsed = Number(pageParam);
     const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
 
-    const rows = await CommentRepository.listTopLevel(videoId, (page - 1) * PAGE_SIZE, PAGE_SIZE);
+    const rows = await CommentRepository.listTopLevel(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE);
     const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerId, viewerId));
     enrich({ commentCount: comments.length });
     return { comments, page, hasMore: rows.length > PAGE_SIZE };
@@ -91,11 +94,11 @@ export const CommentService = {
   async listReplies(viewerId: string | undefined, videoId: string, commentId: string) {
     enrich({ commentAction: "replies", commentParentId: commentId });
     const { ownerId } = await commentableVideo(viewerId, videoId);
-    if (!(await CommentRepository.findThread(videoId, commentId))) {
+    if (!(await CommentRepository.findThread(videoId, commentId, viewerId))) {
       throw commentNotFound();
     }
 
-    const replies = (await CommentRepository.listReplies(commentId)).map((row) => present(row, ownerId, viewerId));
+    const replies = (await CommentRepository.listReplies(commentId, viewerId)).map((row) => present(row, ownerId, viewerId));
     enrich({ commentCount: replies.length });
     return { replies };
   },
@@ -141,9 +144,36 @@ export const CommentService = {
     if (text !== comment.body && !(await CommentRepository.edit(commentId, authorId, text))) {
       throw commentNotFound();
     }
-    const changed = await CommentRepository.findWithAuthor(commentId);
+    const changed = await CommentRepository.findWithAuthor(commentId, authorId);
     if (!changed || changed.deletedAt) throw commentNotFound();
     return present(changed, ownerId, authorId);
+  },
+
+  // The Comments and Replies the owner has hidden, newest first, with how many
+  // there are. A page number that is not a whole number from 1 is the first page.
+  async listHidden(viewerId: string, videoId: string, pageParam: unknown) {
+    enrich({ commentAction: "hidden" });
+    const { isOwner } = await commentableVideo(viewerId, videoId);
+    if (!isOwner) throw commentNotFound();
+    const parsed = Number(pageParam);
+    const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+
+    const [rows, total] = await Promise.all([
+      CommentRepository.listHidden(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE),
+      CommentRepository.countHidden(videoId),
+    ]);
+    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, viewerId, viewerId));
+    enrich({ commentCount: comments.length });
+    return { comments, page, hasMore: rows.length > PAGE_SIZE, total };
+  },
+
+  // The Video's owner hides a Comment or Reply, or brings it back. Anyone else
+  // is told it is not found. Hiding is not deletion.
+  async setHidden(viewerId: string, videoId: string, commentId: string, hidden: boolean) {
+    enrich({ commentAction: hidden ? "hide" : "unhide", commentId });
+    const { isOwner } = await commentableVideo(viewerId, videoId);
+    if (!isOwner || !(await CommentRepository.exists(videoId, commentId))) throw commentNotFound();
+    await CommentRepository.setHidden(commentId, hidden);
   },
 
   // Deletes the author's own Comment. It is only flagged (ADR 0001). A Comment
