@@ -147,9 +147,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         parentId: { type: string, format: uuid, nullable: true, description: "The top-level Comment a Reply belongs to; null for a top-level Comment." }
-        body: { type: string, maxLength: 1000 }
-        authorName: { type: string }
+        body: { type: string, nullable: true, maxLength: 1000, description: "Null on a placeholder." }
+        authorName: { type: string, nullable: true, description: "Null on a placeholder." }
         isChannelOwner: { type: boolean, description: "The author owns the Video." }
+        isAuthor: { type: boolean, description: "The caller wrote it, so they can edit and delete it." }
+        edited: { type: boolean, description: "The author changed the text after posting. The earlier wording is not kept." }
+        deleted: { type: boolean, description: "A deleted Comment that still has Replies: a placeholder with no author and no text, closed to new Replies." }
         createdAt: { type: string, format: date-time }
         replyCount: { type: integer, description: "Visible Replies; always 0 on a Reply." }
       example:
@@ -159,6 +162,9 @@ components:
         authorName: grace-hopper
         isChannelOwner: false
         createdAt: "2026-10-02T10:00:00.000Z"
+        isAuthor: false
+        edited: false
+        deleted: false
         replyCount: 1
     ChannelVideo:
       type: object
@@ -701,6 +707,70 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: That comment can no longer be answered. }
+  /videos/{id}/comments/{commentId}:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid }, description: The Comment's or Reply's id. }
+    patch:
+      tags: [Watching]
+      summary: Edit your Comment
+      description: |
+        The author only, at any time. The text follows the writing rules (trimmed, 1 to 1000 characters).
+        The Comment then shows `edited`; the earlier wording is not kept. Someone else's, a missing or a
+        deleted Comment is 404, as is a Video the caller cannot watch; a Video that is not READY is 409.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+            example: { body: Lovely trip, honestly. }
+      responses:
+        "200":
+          description: The changed Comment.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comment: { $ref: "#/components/schemas/Comment" }
+        "400":
+          description: The body is missing, blank, not text or over 1000 characters.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Write something before posting. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: A missing or deleted Comment or Video, someone else's Comment, or a PRIVATE Video that is not yours.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Comment not found. }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
+    delete:
+      tags: [Watching]
+      summary: Delete your Comment
+      description: |
+        The author only. The Comment is flagged as deleted and nothing is removed (ADR 0001). With
+        Replies it stays in the list as a placeholder (`deleted: true`, no author, no text, closed to
+        new Replies, Replies kept); without, it disappears. A placeholder disappears when its last
+        Reply is deleted. Deleted Comments and placeholders are not in the watch response's `comments` count.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: A missing or already deleted Comment, someone else's Comment, or a Video the caller cannot watch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Comment not found. }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
   /videos/{id}/comments/{commentId}/replies:
     parameters:
       - { $ref: "#/components/parameters/VideoId" }
@@ -710,7 +780,8 @@ paths:
       summary: List a Comment's Replies
       description: |
         Visible Replies to a top-level Comment, oldest first, all in one response. Same access as
-        **List a video's Comments**; an unknown or non-top-level Comment is 404.
+        **List a video's Comments**; an unknown, non-top-level or fully gone Comment is 404. A deleted
+        Comment's Replies can still be read while any is visible.
       security: [{}, { cookieAuth: [] }, { bearerAuth: [] }]
       responses:
         "200":

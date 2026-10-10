@@ -20,27 +20,47 @@ async function commentableVideo(viewerId: string | undefined, videoId: string) {
   return { ownerId: video.channel.userId };
 }
 
+// A deleted Comment still listed is a placeholder: it keeps its place and
+// Reply count but carries no author and no text.
 function present(
   comment: {
     id: string;
     parentId: string | null;
     body: string;
     createdAt: Date;
+    editedAt: Date | null;
+    deletedAt: Date | null;
     authorId: string;
     author: { name: string };
     _count: { replies: number };
   },
   ownerId: string,
+  viewerId: string | undefined,
 ) {
+  const deleted = comment.deletedAt !== null;
   return {
     id: comment.id,
     parentId: comment.parentId,
-    body: comment.body,
-    authorName: comment.author.name,
-    isChannelOwner: comment.authorId === ownerId,
+    body: deleted ? null : comment.body,
+    authorName: deleted ? null : comment.author.name,
+    isChannelOwner: !deleted && comment.authorId === ownerId,
+    isAuthor: !deleted && viewerId !== undefined && comment.authorId === viewerId,
+    deleted,
+    edited: !deleted && comment.editedAt !== null,
     createdAt: comment.createdAt,
     replyCount: comment._count.replies,
   };
+}
+
+// Text of a Comment, as written or edited.
+function commentText(body: unknown) {
+  if (typeof body !== "string") throw new HttpError(400, "The comment must be text.");
+  const text = body.trim();
+  if (text === "") throw new HttpError(400, "Write something before posting.");
+  if (text.length > BODY_MAX) {
+    throw new HttpError(400, `A comment can be at most ${BODY_MAX} characters.`);
+  }
+  return text;
 }
 
 export const CommentService = {
@@ -53,7 +73,7 @@ export const CommentService = {
     const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
 
     const rows = await CommentRepository.listTopLevel(videoId, (page - 1) * PAGE_SIZE, PAGE_SIZE);
-    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerId));
+    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerId, viewerId));
     enrich({ commentCount: comments.length });
     return { comments, page, hasMore: rows.length > PAGE_SIZE };
   },
@@ -62,10 +82,11 @@ export const CommentService = {
   async listReplies(viewerId: string | undefined, videoId: string, commentId: string) {
     enrich({ commentAction: "replies", commentParentId: commentId });
     const { ownerId } = await commentableVideo(viewerId, videoId);
-    const parent = await CommentRepository.findVisible(videoId, commentId);
-    if (!parent || parent.parentId !== null) throw new HttpError(404, "Comment not found.");
+    if (!(await CommentRepository.findThread(videoId, commentId))) {
+      throw new HttpError(404, "Comment not found.");
+    }
 
-    const replies = (await CommentRepository.listReplies(commentId)).map((row) => present(row, ownerId));
+    const replies = (await CommentRepository.listReplies(commentId)).map((row) => present(row, ownerId, viewerId));
     enrich({ commentCount: replies.length });
     return { replies };
   },
@@ -74,12 +95,7 @@ export const CommentService = {
   // attaches to the same top-level Comment, so conversations stay one level deep.
   async create(authorId: string, videoId: string, body: unknown, parentId: unknown) {
     enrich({ commentAction: "create" });
-    if (typeof body !== "string") throw new HttpError(400, "The comment must be text.");
-    const text = body.trim();
-    if (text === "") throw new HttpError(400, "Write something before posting.");
-    if (text.length > BODY_MAX) {
-      throw new HttpError(400, `A comment can be at most ${BODY_MAX} characters.`);
-    }
+    const text = commentText(body);
     if (parentId !== undefined && parentId !== null && typeof parentId !== "string") {
       throw new HttpError(400, "The comment to answer must be an id.");
     }
@@ -100,6 +116,33 @@ export const CommentService = {
 
     const comment = await CommentRepository.create({ videoId, authorId, parentId: topLevelId, body: text });
     enrich({ commentId: comment.id });
-    return present(comment, ownerId);
+    return present(comment, ownerId, authorId);
+  },
+
+  // Changes the author's own Comment. Someone else's, a missing or a deleted
+  // Comment is not found. The earlier wording is not kept.
+  async edit(authorId: string, videoId: string, commentId: string, body: unknown) {
+    enrich({ commentAction: "edit", commentId });
+    const text = commentText(body);
+    const { ownerId } = await commentableVideo(authorId, videoId);
+    const comment = await CommentRepository.findOwn(videoId, commentId, authorId);
+    if (!comment) throw new HttpError(404, "Comment not found.");
+
+    // Saving the same words is not an edit.
+    if (text !== comment.body && !(await CommentRepository.edit(commentId, authorId, text))) {
+      throw new HttpError(404, "Comment not found.");
+    }
+    return present(await CommentRepository.findWithAuthor(commentId), ownerId, authorId);
+  },
+
+  // Deletes the author's own Comment. It is only flagged (ADR 0001). A Comment
+  // with Replies stays listed as a placeholder, which the listing decides.
+  async remove(authorId: string, videoId: string, commentId: string) {
+    enrich({ commentAction: "delete", commentId });
+    await commentableVideo(authorId, videoId);
+    const comment = await CommentRepository.findOwn(videoId, commentId, authorId);
+    if (!comment || !(await CommentRepository.softDelete(commentId, authorId))) {
+      throw new HttpError(404, "Comment not found.");
+    }
   },
 };

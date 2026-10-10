@@ -20,4 +20,19 @@ export const CommentController = {
     const comment = await CommentService.create(req.user!.id, req.params.id as string, text, parentId);
     res.status(201).json({ comment });
   },
+
+  async edit(req: Request, res: Response) {
+    const comment = await CommentService.edit(
+      req.user!.id,
+      req.params.id as string,
+      req.params.commentId as string,
+      (req.body ?? {}).body,
+    );
+    res.status(200).json({ comment });
+  },
+
+  async remove(req: Request, res: Response) {
+    await CommentService.remove(req.user!.id, req.params.id as string, req.params.commentId as string);
+    res.status(204).end();
+  },
 };
