@@ -1,7 +1,7 @@
 import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
-import { enrich } from "../lib/wide-event.ts";
-import { describeQueueError, queueVideoProcessing } from "../lib/video-queue.ts";
+import { enrich, errorType } from "../lib/wide-event.ts";
+import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import type {
   PostFinishResult,
@@ -111,7 +111,7 @@ export const TusdService = {
       try {
         await queueVideoProcessing(video.id);
       } catch (error) {
-        enrich({ queueError: describeQueueError(error), statusTo: "FAILED" });
+        enrich({ queueError: { type: errorType(error) }, statusTo: "FAILED" });
         await VideoRepository.markFailed(video.id);
       }
     }

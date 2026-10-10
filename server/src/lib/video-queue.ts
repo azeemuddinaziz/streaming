@@ -1,11 +1,5 @@
 import { createJobRunner, type JobRunner } from "./jobs.ts";
 
-// What an event records about a failure to queue; the message stays out
-// because a driver error can carry connection details.
-export function describeQueueError(error: unknown) {
-  return { type: error instanceof Error ? error.name : "NonError" };
-}
-
 export const PROCESS_VIDEO_JOB = "process-video";
 
 let runner: Promise<JobRunner> | undefined;

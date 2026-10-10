@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { HttpError } from "../errors.ts";
 import { mediaPath, signMediaToken } from "../lib/media-token.ts";
-import { enrich } from "../lib/wide-event.ts";
+import { enrich, errorType } from "../lib/wide-event.ts";
 import { createStorage } from "../lib/storage.ts";
 import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
-import { describeQueueError, queueVideoProcessing } from "../lib/video-queue.ts";
+import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
 const TITLE_MAX = 100;
@@ -184,7 +184,7 @@ export const VideoService = {
     try {
       await queueVideoProcessing(videoId);
     } catch (error) {
-      enrich({ queueError: describeQueueError(error), statusTo: "FAILED" });
+      enrich({ queueError: { type: errorType(error) }, statusTo: "FAILED" });
       await VideoRepository.markFailed(videoId);
       throw new HttpError(503, "Processing could not be started. Try again in a moment.");
     }
