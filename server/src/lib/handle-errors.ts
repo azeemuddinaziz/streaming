@@ -6,25 +6,27 @@ import { enrich } from "./wide-event.ts";
 // `expected` tells a deliberate answer (a 404, 401, 409...) from a crash;
 // only a crash carries a stack.
 export const handleErrors: ErrorRequestHandler = (error, _req, res, _next) => {
-  const known = error instanceof Error ? error : new Error(String(error));
-  const tooLarge = (error as { type?: string }).type === "entity.too.large";
-
-  if (error instanceof HttpError || tooLarge) {
+  const asError = error instanceof Error ? error : new Error(String(error));
+  const describe = (expected: boolean, stack?: string) =>
     enrich({
-      error: { type: known.name, message: known.message, expected: true },
+      error: {
+        type: asError.name,
+        message: asError.message,
+        expected,
+        ...(stack ? { stack } : {}),
+      },
     });
-    const status = error instanceof HttpError ? error.status : 413;
-    const msg = error instanceof HttpError ? error.message : "That image is over 5 MB.";
-    return res.status(status).json({ msg });
+
+  if (error instanceof HttpError) {
+    describe(true);
+    return res.status(error.status).json({ msg: error.message });
   }
 
-  enrich({
-    error: {
-      type: known.name,
-      message: known.message,
-      expected: false,
-      stack: known.stack,
-    },
-  });
+  if ((error as { type?: string }).type === "entity.too.large") {
+    describe(true);
+    return res.status(413).json({ msg: "That image is over 5 MB." });
+  }
+
+  describe(false, error instanceof Error ? error.stack : undefined);
   return res.status(500).json({ msg: "Something went wrong." });
 };
