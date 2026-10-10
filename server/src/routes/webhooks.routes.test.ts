@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../lib/prisma.ts";
 import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase, startTestApi } from "../test/helpers.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
+import { setEmit, type WideEvent } from "../lib/wide-event.ts";
 import { signToken } from "../utils/jwt.ts";
 
 // The job queue is its own seam; here only what is asked of it matters.
@@ -340,5 +341,56 @@ describe("tusd post-finish hook", () => {
     expect(await prisma.video.count()).toBe(0);
     const upload = await prisma.upload.findUniqueOrThrow({ where: { tusId: "abc123" } });
     expect(upload.completedAt).toBeNull();
+  });
+});
+
+describe("tusd hook events", () => {
+  let events: WideEvent[];
+  beforeEach(() => {
+    events = [];
+    setEmit((event) => events.push(event));
+  });
+  afterEach(() => setEmit(null));
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+  const post = async (body: unknown) => {
+    const response = await api.request("/webhooks/tusd", { method: "POST", json: body });
+    await settle();
+    return response;
+  };
+
+  it("records a rejected hook with its hook name and rejection status, though tusd gets a 200", async () => {
+    const response = await post(hook("pre-create", { id: "secret-tus-id" }));
+
+    expect(response.status).toBe(200);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      status: 200,
+      tusdHook: "pre-create",
+      outcome: "rejected",
+      rejectStatus: 401,
+      tusdUploadFingerprint: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
+    expect(JSON.stringify(events[0])).not.toContain("secret-tus-id");
+  });
+
+  it("records an allowed hook", async () => {
+    const { token } = await signedUp();
+
+    await post(hook("pre-create", { headers: { Authorization: [`Bearer ${token}`] } }));
+
+    expect(events[0]).toMatchObject({ tusdHook: "pre-create", outcome: "allowed" });
+    expect(events[0]).not.toHaveProperty("rejectStatus");
+  });
+
+  it("records an unhandled hook type on the event and writes no console line", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const response = await post({ ...hook("pre-create"), Type: "pre-teleport" });
+
+    expect(response.status).toBe(200);
+    expect(events[0]).toMatchObject({ tusdHook: "pre-teleport", outcome: "unhandled" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
