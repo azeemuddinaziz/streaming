@@ -72,6 +72,11 @@ The API signs people in with a JWT (`jose`, HS256, signed with `JWT_SECRET`). Si
 
 Account rules live in `AuthService`: the account name is 3 to 30 characters of letters, digits and hyphens, unique regardless of case (`User.nameKey` holds the lowercased copy), and a Channel is created in the same transaction as its User. A Channel has no name column; it is named after its User. The tusd hooks use the same token (see Resumable uploads).
 
+### Logging
+Every API request emits exactly one wide event: a single JSON line on stdout, built while the request is handled and written once when it ends (also when the client aborts). `wideEvents` (`server/src/lib/wide-event.ts`) is the first middleware in `createApp`; `emit` is the one place events leave (tests replace it with `setEmit` to collect them). Convention: every new route, service and process records its context on the wide event with `enrich({ ... })` (works anywhere in a request without `req`, never throws, does nothing outside a request) instead of ad-hoc `console.*` lines. Only named fields are recorded: never headers, cookies, bodies, query strings, IP or user agent; the media token in the path is replaced by `:token`. A new router must be mounted with `mountAt("/api/v1/<name>")` in `createApp` so its events carry the route pattern. Every event is kept (no sampling yet).
+
+Fields: `requestId` (generated UUID, returned as the `X-Request-Id` response header; an inbound one is ignored), `service` (`api`), `environment` (`NODE_ENV`), `method`, `route` (pattern, null when nothing matched), `path` (concrete, no query string), `status` (null when aborted before a response), `aborted`, `durationMs`, `userId` and `channelId` (signed in only), `errorName` (unhandled errors; the message is left out because it can carry request data). Later tickets list their own fields here.
+
 ### Prisma 7 specifics
 - Generated client lives in `server/generated/prisma` (gitignored, so run `pnpm generate` after cloning and after schema changes).
 - The datasource URL is configured in `prisma7.config.ts` (not in `schema.prisma`), and the client is constructed with the `@prisma/adapter-pg` driver adapter in `src/lib/prisma.ts`.

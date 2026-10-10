@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Router, type ErrorRequestHandler } from "express";
 import { HttpError } from "./errors.ts";
+import { enrich, mountAt, wideEvents } from "./lib/wide-event.ts";
 import channelsRouter from "./routes/channels.routes.ts";
 import mediaRouter from "./routes/media.routes.ts";
 import uploadsRouter from "./routes/uploads.routes.ts";
@@ -18,7 +19,9 @@ const handleErrors: ErrorRequestHandler = (error, req, res, _next) => {
     return res.status(413).json({ msg: "That image is over 5 MB." });
   }
 
-  console.error(error);
+  enrich({
+    errorName: error instanceof Error ? error.name : "NonError",
+  });
   return res.status(500).json({ msg: "Something went wrong." });
 };
 
@@ -26,27 +29,30 @@ export function createApp() {
   const app = express();
   const router = Router();
 
+  app.use(wideEvents);
+
   // The web app is served from another origin and sends the sign-in cookie.
   app.use(
     cors({
       origin: (origin, callback) =>
         callback(null, origin !== undefined && origin === process.env.WEB_ORIGIN),
       credentials: true,
+      exposedHeaders: ["X-Request-Id"],
     }),
   );
   app.use(express.json());
   app.use(cookieParser());
 
-  router.get("/", (req, res) => {
+  router.get("/", mountAt("/api/v1"), (req, res) => {
     res.status(200).json({ msg: "Hello World!" });
   });
 
-  router.use("/channels", channelsRouter);
-  router.use("/videos", videoRouter);
-  router.use("/webhooks", webhooksRouter);
-  router.use("/media", mediaRouter);
-  router.use("/uploads", uploadsRouter);
-  router.use("/users", usersRouter);
+  router.use("/channels", mountAt("/api/v1/channels"), channelsRouter);
+  router.use("/videos", mountAt("/api/v1/videos"), videoRouter);
+  router.use("/webhooks", mountAt("/api/v1/webhooks"), webhooksRouter);
+  router.use("/media", mountAt("/api/v1/media"), mediaRouter);
+  router.use("/uploads", mountAt("/api/v1/uploads"), uploadsRouter);
+  router.use("/users", mountAt("/api/v1/users"), usersRouter);
 
   app.use("/api/v1", router);
   app.use(handleErrors);

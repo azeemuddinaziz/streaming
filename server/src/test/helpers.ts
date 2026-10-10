@@ -20,6 +20,7 @@ export async function startTestApi() {
         body: json === undefined ? rest.body : JSON.stringify(json),
       });
     },
+    baseUrl,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
