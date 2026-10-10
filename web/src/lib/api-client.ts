@@ -17,6 +17,8 @@ export type StudioVideo = {
   description: string | null;
   status: "PROCESSING" | "READY" | "FAILED";
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
+  // The owner has Comments on for this Video.
+  commentsEnabled: boolean;
   createdAt: string;
   // Where the Thumbnail is served on the API; null until the Video is ready.
   thumbnailPath: string | null;
@@ -183,6 +185,7 @@ export async function updateVideoDetails(
     title: string;
     description: string;
     visibility: StudioVideo["visibility"];
+    commentsEnabled: boolean;
   },
   baseUrl: string = getApiBaseUrl(),
 ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -210,8 +213,10 @@ export type WatchVideo = {
   channelName: string;
   createdAt: string;
   views: number;
-  // The Comments and Replies anyone sees, together.
-  comments: number;
+  // The Comments and Replies anyone sees, together. Absent while Comments are
+  // off, except for the owner.
+  comments?: number;
+  commentsEnabled: boolean;
   // The signed-in person owns this Video, so can moderate its Comments.
   isOwner: boolean;
   // Where the master playlist is served, on the API. Only for a ready Video.

@@ -74,9 +74,11 @@ export const VideoService = {
       channelName: video.channel.user.name,
       createdAt: video.createdAt,
       views: video._count.views,
-      // The Comments and Replies anyone sees; hidden and deleted ones are left out.
       isOwner,
-      comments: video._count.comments,
+      commentsEnabled: video.commentsEnabled,
+      // The Comments and Replies anyone sees; hidden and deleted ones are left
+      // out. While Comments are off only the owner is told (or sees any).
+      ...(video.commentsEnabled || isOwner ? { comments: video._count.comments } : {}),
     };
     if (status !== "READY" || !video.masterPlaylistKey) return base;
 
@@ -124,6 +126,7 @@ export const VideoService = {
       description: video.description,
       status: video.status,
       visibility: video.visibility,
+      commentsEnabled: video.commentsEnabled,
       createdAt: video.createdAt,
       thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
     })));
@@ -212,15 +215,22 @@ export const VideoService = {
       throw new HttpError(400, "Visibility must be PRIVATE, UNLISTED or PUBLIC.");
     }
 
+    const commentsEnabled = fields.commentsEnabled;
+    if (commentsEnabled !== undefined && typeof commentsEnabled !== "boolean") {
+      throw new HttpError(400, "commentsEnabled must be true or false.");
+    }
+
     const data = {
       title: title && title.toLowerCase() === video.upload?.filename.toLowerCase() ? null : title,
       description,
       visibility: visibility as (typeof VISIBILITIES)[number] | undefined,
+      commentsEnabled,
     };
     const result = {
       title: data.title === undefined ? video.title : data.title,
       description: data.description === undefined ? video.description : data.description,
       visibility: data.visibility ?? video.visibility,
+      commentsEnabled: data.commentsEnabled ?? video.commentsEnabled,
     };
     if (result.visibility !== "PRIVATE" && (!result.title || !result.description)) {
       throw new HttpError(400, "Add a title and a description before making a video unlisted or public.");
@@ -235,6 +245,9 @@ export const VideoService = {
       descriptionChanged: result.description !== video.description,
       ...(result.visibility !== video.visibility
         ? { visibilityFrom: video.visibility, visibilityTo: result.visibility }
+        : {}),
+      ...(result.commentsEnabled !== video.commentsEnabled
+        ? { commentsOffFrom: !video.commentsEnabled, commentsOffTo: !result.commentsEnabled }
         : {}),
     });
     return { id: videoId, ...result };

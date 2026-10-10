@@ -46,7 +46,13 @@ export class VideoRepository {
   static async findForComments(videoId: string) {
     return await prisma.video.findFirst({
       where: { id: videoId, deletedAt: null },
-      select: { id: true, status: true, visibility: true, channel: { select: { userId: true } } },
+      select: {
+        id: true,
+        status: true,
+        visibility: true,
+        commentsEnabled: true,
+        channel: { select: { userId: true } },
+      },
     });
   }
 
@@ -103,8 +109,19 @@ export class VideoRepository {
   // edits made at once cannot each pass a check the other undoes. False when
   // the Video changed in between.
   static async updateDetails(
-    before: { id: string; title: string | null; description: string | null; visibility: Visibility },
-    data: { title?: string | null; description?: string | null; visibility?: Visibility },
+    before: {
+      id: string;
+      title: string | null;
+      description: string | null;
+      visibility: Visibility;
+      commentsEnabled: boolean;
+    },
+    data: {
+      title?: string | null;
+      description?: string | null;
+      visibility?: Visibility;
+      commentsEnabled?: boolean;
+    },
   ) {
     const claimed = await prisma.video.updateMany({
       where: {
@@ -113,6 +130,7 @@ export class VideoRepository {
         title: before.title,
         description: before.description,
         visibility: before.visibility,
+        commentsEnabled: before.commentsEnabled,
       },
       data,
     });

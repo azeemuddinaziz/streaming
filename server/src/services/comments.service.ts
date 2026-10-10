@@ -17,7 +17,12 @@ async function commentableVideo(viewerId: string | undefined, videoId: string) {
     throw new HttpError(404, "Video not found.");
   }
   if (video.status !== "READY") throw new HttpError(409, "This video is not ready for comments.");
-  return { ownerId: video.channel.userId, isOwner };
+  return { ownerId: video.channel.userId, isOwner, commentsEnabled: video.commentsEnabled };
+}
+
+// Writing and editing stop while the owner has Comments off.
+function requireCommentsOn(commentsEnabled: boolean) {
+  if (!commentsEnabled) throw new HttpError(409, "Comments are turned off for this video.");
 }
 
 // A deleted Comment still listed is a placeholder: it keeps its place and
@@ -80,9 +85,11 @@ export const CommentService = {
   // whole number from 1 is the first page.
   async list(viewerId: string | undefined, videoId: string, pageParam: unknown) {
     enrich({ commentAction: "list" });
-    const { ownerId } = await commentableVideo(viewerId, videoId);
+    const { ownerId, isOwner, commentsEnabled } = await commentableVideo(viewerId, videoId);
     const parsed = Number(pageParam);
     const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+    // While Comments are off they are kept, but only the owner sees them.
+    if (!commentsEnabled && !isOwner) return { comments: [], page, hasMore: false };
 
     const rows = await CommentRepository.listTopLevel(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE);
     const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerId, viewerId));
@@ -93,7 +100,8 @@ export const CommentService = {
   // The Replies to a top-level Comment, oldest first.
   async listReplies(viewerId: string | undefined, videoId: string, commentId: string) {
     enrich({ commentAction: "replies", commentParentId: commentId });
-    const { ownerId } = await commentableVideo(viewerId, videoId);
+    const { ownerId, isOwner, commentsEnabled } = await commentableVideo(viewerId, videoId);
+    if (!commentsEnabled && !isOwner) return { replies: [] };
     if (!(await CommentRepository.findThread(videoId, commentId, viewerId))) {
       throw commentNotFound();
     }
@@ -112,7 +120,8 @@ export const CommentService = {
       throw new HttpError(400, "The comment to answer must be an id.");
     }
 
-    const { ownerId } = await commentableVideo(authorId, videoId);
+    const { ownerId, commentsEnabled } = await commentableVideo(authorId, videoId);
+    requireCommentsOn(commentsEnabled);
 
     let topLevelId: string | null = null;
     if (typeof parentId === "string") {
@@ -135,9 +144,10 @@ export const CommentService = {
   // Comment is not found. The earlier wording is not kept.
   async edit(authorId: string, videoId: string, commentId: string, body: unknown) {
     enrich({ commentAction: "edit", commentId });
-    const { ownerId } = await commentableVideo(authorId, videoId);
+    const { ownerId, commentsEnabled } = await commentableVideo(authorId, videoId);
+    // Someone else's Comment is not found whatever they send; then the setting; only then the text.
     const comment = await ownComment(videoId, commentId, authorId);
-    // Someone else's Comment is not found whatever they send; only then is the text checked.
+    requireCommentsOn(commentsEnabled);
     const text = commentText(body);
 
     // Saving the same words is not an edit.

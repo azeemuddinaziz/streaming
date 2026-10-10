@@ -54,6 +54,9 @@ model Video {
   // Set by the owner. Until then the Upload's filename is only a placeholder label.
   title       String?
   description String?
+  // Set by the owner. While false, new Comments and edits are refused and only
+  // the owner sees the existing ones; nothing is lost (GLOSSARY, Comments off).
+  commentsEnabled Boolean   @default(true)
   createdAt  DateTime    @default(now())
   // Set when the owner deletes the Video. Nothing is removed; every read path
   // must leave out a Video that has it (see ADR 0001).
