@@ -90,7 +90,7 @@ describe("discarding stale Uploads", () => {
       UploadService.discardStale(async (tusId) => {
         if (tusId === "stuck") throw new Error("storage down");
       }),
-    ).rejects.toThrow(/1 of 2/);
+    ).rejects.toThrow(/1 of 2 stale uploads: stuck/);
 
     const stuck = await prisma.upload.findUniqueOrThrow({ where: { tusId: "stuck" } });
     const fine = await prisma.upload.findUniqueOrThrow({ where: { tusId: "fine" } });

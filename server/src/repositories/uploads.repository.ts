@@ -40,7 +40,7 @@ export class UploadRepository {
         where: { id: upload.id },
         data: { videoId: video.id },
       });
-      return video;
+      return { ...video, uploadId: upload.id };
     });
   }
 
