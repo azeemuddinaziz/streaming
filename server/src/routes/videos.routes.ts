@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import { THUMBNAIL_MAX_BYTES } from "../lib/thumbnail.ts";
 import { AuthenticationMiddleware, OptionalAuthenticationMiddleware } from "../middlewares/auth.middleware.ts";
+import { CommentController } from "../controllers/comments.controller.ts";
 import { VideoController } from "../controllers/videos.controller.ts";
 
 const router = Router();
@@ -8,6 +9,13 @@ const router = Router();
 router.get("/mine", AuthenticationMiddleware.verifyToken, VideoController.mine);
 router.get("/:id/watch", OptionalAuthenticationMiddleware.identify, VideoController.watch);
 router.post("/:id/views", OptionalAuthenticationMiddleware.identify, VideoController.view);
+router.get("/:id/comments", OptionalAuthenticationMiddleware.identify, CommentController.list);
+router.get(
+  "/:id/comments/:commentId/replies",
+  OptionalAuthenticationMiddleware.identify,
+  CommentController.replies,
+);
+router.post("/:id/comments", AuthenticationMiddleware.verifyToken, CommentController.create);
 router.patch("/:id", AuthenticationMiddleware.verifyToken, VideoController.update);
 router.delete("/:id", AuthenticationMiddleware.verifyToken, VideoController.remove);
 router.put(

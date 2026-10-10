@@ -5,6 +5,9 @@ import {
   checkApiHealth,
   deleteVideo,
   getChannelPage,
+  getComments,
+  getReplies,
+  postComment,
   getCurrentUser,
   getPublicVideos,
   getStudioVideos,
@@ -402,5 +405,47 @@ describe("getPublicVideos", () => {
 
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getPublicVideos(1, await startStubApi(500))).toEqual({ ok: false });
+  });
+});
+
+describe("Comments", () => {
+  it("reads a page, reads Replies, and posts with credentials", async () => {
+    const seen: string[] = [];
+    let sent = "";
+    stub = createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      let data = "";
+      req.on("data", (chunk) => (data += chunk));
+      req.on("end", () => {
+        sent = data;
+        res.writeHead(req.method === "POST" ? 201 : 200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ comments: [], replies: [], hasMore: true, comment: { id: "c1" } }));
+      });
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await getComments("v1", 2, baseUrl)).toEqual({ ok: true, comments: [], hasMore: true });
+    expect(await getReplies("v1", "c1", baseUrl)).toEqual({ ok: true, replies: [] });
+    expect(await postComment("v1", { body: "hi", parentId: "c1" }, baseUrl)).toEqual({
+      ok: true,
+      comment: { id: "c1" },
+    });
+    expect(seen).toEqual([
+      "GET /api/v1/videos/v1/comments?page=2",
+      "GET /api/v1/videos/v1/comments/c1/replies",
+      "POST /api/v1/videos/v1/comments",
+    ]);
+    expect(JSON.parse(sent)).toEqual({ body: "hi", parentId: "c1" });
+  });
+
+  it("returns the API's message, or a connection message", async () => {
+    const baseUrl = await startStubApi(401);
+    expect(await postComment("v1", { body: "hi" }, baseUrl)).toEqual({ ok: false, message: "stub" });
+    expect(await getComments("v1", 1, baseUrl)).toEqual({ ok: false, message: "stub" });
+    await new Promise((resolve) => stub!.close(resolve));
+    stub = undefined;
+    const gone = await getReplies("v1", "c", baseUrl);
+    expect(gone.ok).toBe(false);
   });
 });

@@ -34,8 +34,18 @@ export class VideoRepository {
       where: { id: videoId, deletedAt: null },
       include: {
         channel: { select: { userId: true, user: { select: { name: true } } } },
-        _count: { select: { views: true } },
+        _count: {
+          select: { views: true, comments: { where: { deletedAt: null, hiddenAt: null } } },
+        },
       },
+    });
+  }
+
+  // What Comments need to know about a Video.
+  static async findForComments(videoId: string) {
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
+      select: { id: true, status: true, visibility: true, channel: { select: { userId: true } } },
     });
   }
 
