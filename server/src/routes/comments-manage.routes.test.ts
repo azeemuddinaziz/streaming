@@ -146,6 +146,7 @@ describe("deleting a Comment", () => {
       isAuthor: false,
       deleted: true,
       edited: false,
+      hidden: false,
       createdAt: parent.createdAt,
       replyCount: 1,
     });

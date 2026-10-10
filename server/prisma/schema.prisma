@@ -125,8 +125,6 @@ model View {
 // `editedAt`, `deletedAt` and `hiddenAt` are for editing, deleting and hiding,
 // which later tickets build; every read path must leave out a Comment that has
 // `deletedAt` or `hiddenAt` unless it is there to show a placeholder or to the owner.
-// The Video's visible-Comment count does not yet leave out Replies under a hidden or
-// deleted parent; the hiding ticket must.
 model Comment {
   id        String    @id @default(uuid())
   videoId   String

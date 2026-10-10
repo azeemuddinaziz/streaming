@@ -151,6 +151,7 @@ components:
         authorName: { type: string, nullable: true, description: "Null on a placeholder." }
         isChannelOwner: { type: boolean, description: "The author owns the Video." }
         isAuthor: { type: boolean, description: "The caller wrote it, so they can edit and delete it." }
+        hidden: { type: boolean, description: "Hidden by the owner. True only for the owner; an author is never told their Comment was hidden." }
         edited: { type: boolean, description: "The author changed the text after posting. The earlier wording is not kept." }
         deleted: { type: boolean, description: "A deleted Comment that still has Replies: a placeholder with no author and no text, closed to new Replies." }
         createdAt: { type: string, format: date-time }
@@ -163,6 +164,7 @@ components:
         isChannelOwner: false
         createdAt: "2026-10-02T10:00:00.000Z"
         isAuthor: false
+        hidden: false
         edited: false
         deleted: false
         replyCount: 1
@@ -592,7 +594,8 @@ paths:
                       channelName: { type: string }
                       createdAt: { type: string, format: date-time }
                       views: { type: integer }
-                      comments: { type: integer, description: "Visible Comments and Replies together." }
+                      comments: { type: integer, description: "The Comments and Replies anyone sees together; deleted and hidden ones (and Replies under a hidden Comment) are left out." }
+                      isOwner: { type: boolean, description: "The caller owns the Video, so can hide its Comments." }
                       playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }
               example:
                 video:
@@ -604,6 +607,7 @@ paths:
                   createdAt: "2026-10-01T09:30:00.000Z"
                   views: 12
                   comments: 3
+                  isOwner: false
                   playlistPath: /api/v1/media/eyJhbGciOi.../master.m3u8
         "404": { $ref: "#/components/responses/NotFound" }
   /videos/{id}/views:
@@ -707,6 +711,71 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: That comment can no longer be answered. }
+  /videos/{id}/comments/hidden:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    get:
+      tags: [Watching]
+      summary: List the Comments you hid
+      description: |
+        The Video's owner only (anyone else is 404, signed out is 401). The Comments and Replies the
+        owner hid themselves, newest first, 20 per page, with `total`. Replies hidden only because
+        their parent is hidden are not listed. Same Video rules as listing Comments.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
+                  total: { type: integer, description: How many Comments and Replies are hidden. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
+  /videos/{id}/comments/{commentId}/hide:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Watching]
+      summary: Hide a Comment or Reply
+      description: |
+        The Video's owner only; anyone else, or a missing or deleted Comment, is 404. A hidden
+        Comment is gone for everyone except the owner (see **List the Comments you hid**) and its own
+        author, who still sees it as normal and is not told. Hiding a top-level Comment hides its
+        Replies with it. A hidden Comment cannot be answered (409 when writing a Reply to it). Hiding
+        is not deletion, and repeating it changes nothing.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "204": { description: Hidden. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
+  /videos/{id}/comments/{commentId}/unhide:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Watching]
+      summary: Un-hide a Comment or Reply
+      description: |
+        The Video's owner only. Brings the Comment back, and with it its Replies, except Replies that
+        were hidden on their own.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "204": { description: Visible again. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
   /videos/{id}/comments/{commentId}:
     parameters:
       - { $ref: "#/components/parameters/VideoId" }

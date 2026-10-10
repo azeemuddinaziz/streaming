@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   COMMENT_MAX,
   deleteComment,
   editComment,
   getComments,
+  getHiddenComments,
   getReplies,
   postComment,
+  setCommentHidden,
   type Comment,
 } from "@/lib/api-client";
 
-type Props = { videoId: string; initialCount: number; signedIn: boolean };
+type Props = { videoId: string; initialCount: number; signedIn: boolean; isOwner: boolean };
 
 // One Comment or Reply. The text is rendered as a React text node, so markup
 // and links in it are shown as written and never become elements. The author
@@ -22,12 +25,15 @@ function CommentView({
   comment,
   onChanged,
   onDeleted,
+  onHidden,
   children,
 }: {
   videoId: string;
   comment: Comment;
   onChanged: (comment: Comment) => void;
   onDeleted: () => void;
+  // Given only to the Video's owner: shows Hide on a Comment that is not hidden.
+  onHidden?: () => void;
   children?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
@@ -68,6 +74,16 @@ function CommentView({
     else setMessage(result.message);
   }
 
+  async function hide() {
+    setBusy(true);
+    setMessage(undefined);
+    const result = await setCommentHidden(videoId, comment.id, true);
+    setBusy(false);
+    if (result.ok) onHidden?.();
+    else setMessage(result.message);
+  }
+
+  const canHide = onHidden !== undefined && !comment.hidden;
   const editId = `edit-${comment.id}`;
   return (
     <article className="comment">
@@ -117,24 +133,34 @@ function CommentView({
       ) : (
         <p className="comment-body">{comment.body}</p>
       )}
-      {comment.isAuthor && !editing && (
+      {(comment.isAuthor || canHide) && !editing && (
         <div className="comment-actions">
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => {
-              setText(comment.body ?? "");
-              setSaved(false);
-              setEditing(true);
-            }}
-          >
-            Edit
-          </button>
-          <button className="button button-secondary" type="button" onClick={remove} disabled={busy}>
-            {busy ? "Deleting…" : "Delete"}
-          </button>
+          {comment.isAuthor && (
+            <>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setText(comment.body ?? "");
+                  setSaved(false);
+                  setEditing(true);
+                }}
+              >
+                Edit
+              </button>
+              <button className="button button-secondary" type="button" onClick={remove} disabled={busy}>
+                Delete
+              </button>
+            </>
+          )}
+          {canHide && (
+            <button className="button button-secondary" type="button" onClick={hide} disabled={busy}>
+              Hide
+            </button>
+          )}
         </div>
       )}
+      {busy && <p role="status" className="hint">Working…</p>}
       {saved && !editing && <p role="status" className="hint">Saved.</p>}
       {message && <p role="alert" className="form-error">{message}</p>}
       {children}
@@ -213,14 +239,18 @@ function Replies({
   videoId,
   comment,
   signedIn,
+  isOwner,
   onPosted,
   onReplyDeleted,
+  onReplyHidden,
 }: {
   videoId: string;
   comment: Comment;
   signedIn: boolean;
+  isOwner: boolean;
   onPosted: () => void;
   onReplyDeleted: () => void;
+  onReplyHidden: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [replies, setReplies] = useState<Comment[]>();
@@ -285,6 +315,14 @@ function Replies({
                 setReplies((current) => current?.filter((item) => item.id !== reply.id));
                 onReplyDeleted();
               }}
+              onHidden={
+                isOwner
+                  ? () => {
+                      setReplies((current) => current?.filter((item) => item.id !== reply.id));
+                      onReplyHidden();
+                    }
+                  : undefined
+              }
             >
               {signedIn && !comment.deleted && (
                 <button
@@ -318,7 +356,8 @@ function Replies({
   );
 }
 
-export function CommentSection({ videoId, initialCount, signedIn }: Props) {
+export function CommentSection({ videoId, initialCount, signedIn, isOwner }: Props) {
+  const router = useRouter();
   const [count, setCount] = useState(initialCount);
   const [comments, setComments] = useState<Comment[]>([]);
   const [page, setPage] = useState(0);
@@ -327,25 +366,71 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
   const [error, setError] = useState<string>();
   const [loaded, setLoaded] = useState(false);
 
-  async function loadNext(next = page + 1) {
+  // The owner's "Hidden" tab.
+  const [tab, setTab] = useState<"comments" | "hidden">("comments");
+  const [hidden, setHidden] = useState<Comment[]>([]);
+  const [hiddenPage, setHiddenPage] = useState(0);
+  const [hiddenMore, setHiddenMore] = useState(false);
+  const [hiddenTotal, setHiddenTotal] = useState(0);
+  const [hiddenLoading, setHiddenLoading] = useState(false);
+  const [hiddenError, setHiddenError] = useState<string>();
+  const [hiddenLoaded, setHiddenLoaded] = useState(false);
+
+  async function loadNext(next = page + 1, replace = false) {
     setLoading(true);
     setError(undefined);
     const result = await getComments(videoId, next);
     setLoading(false);
     if (!result.ok) return setError(result.message);
     setComments((current) => {
-      const seen = new Set(current.map((comment) => comment.id));
-      return [...current, ...result.comments.filter((comment) => !seen.has(comment.id))];
+      const base = replace ? [] : current;
+      const seen = new Set(base.map((comment) => comment.id));
+      return [...base, ...result.comments.filter((comment) => !seen.has(comment.id))];
     });
     setPage(next);
     setHasMore(result.hasMore);
     setLoaded(true);
   }
 
+  async function loadHidden(next = hiddenPage + 1, replace = false) {
+    setHiddenLoading(true);
+    setHiddenError(undefined);
+    const result = await getHiddenComments(videoId, next);
+    setHiddenLoading(false);
+    if (!result.ok) return setHiddenError(result.message);
+    setHidden((current) => {
+      const base = replace ? [] : current;
+      const seen = new Set(base.map((comment) => comment.id));
+      return [...base, ...result.comments.filter((comment) => !seen.has(comment.id))];
+    });
+    setHiddenPage(next);
+    setHiddenMore(result.hasMore);
+    setHiddenTotal(result.total);
+    setHiddenLoaded(true);
+  }
+
+  // Loads the first pages once per Video, and again whenever the server hands
+  // down a fresh count (after the owner hides or un-hides something).
   useEffect(() => {
-    void loadNext(1);
-    // Loads the first page once per Video.
-  }, [videoId]);
+    setCount(initialCount);
+    void loadNext(1, true);
+    if (isOwner) void loadHidden(1, true);
+  }, [videoId, initialCount]);
+
+  // Hiding or un-hiding changes what everyone sees, so the count comes from the server again.
+  function moderated() {
+    router.refresh();
+    if (isOwner) void loadHidden(1, true);
+  }
+
+  async function unhide(comment: Comment) {
+    const result = await setCommentHidden(videoId, comment.id, false);
+    if (!result.ok) return setHiddenError(result.message);
+    setHidden((current) => current.filter((item) => item.id !== comment.id));
+    setHiddenTotal((current) => current - 1);
+    router.refresh();
+    void loadNext(1, true);
+  }
 
   return (
     <section className="comments" aria-labelledby="comments-heading">
@@ -353,6 +438,74 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
         {count.toLocaleString("en")} {count === 1 ? "comment" : "comments"}
       </h2>
 
+      {isOwner && (
+        <div className="comment-actions" role="group" aria-label="Show">
+          <button
+            className="button button-secondary"
+            type="button"
+            aria-pressed={tab === "comments"}
+            onClick={() => setTab("comments")}
+          >
+            Comments
+          </button>
+          <button
+            className="button button-secondary"
+            type="button"
+            aria-pressed={tab === "hidden"}
+            onClick={() => setTab("hidden")}
+          >
+            Hidden ({hiddenTotal})
+          </button>
+        </div>
+      )}
+
+      {tab === "hidden" && isOwner ? (
+        <div className="comment-list">
+          <p className="hint">
+            Hidden comments are gone for everyone but you and their authors. Hiding is not deleting; un-hide to bring one back.
+          </p>
+          {hiddenError && (
+            <p role="alert" className="form-error">
+              {hiddenError}{" "}
+              <button className="button button-secondary" type="button" onClick={() => loadHidden()}>
+                Try again
+              </button>
+            </p>
+          )}
+          {hiddenLoading && <p role="status" className="hint">Loading hidden comments…</p>}
+          {hiddenLoaded && hidden.length === 0 && !hiddenError && (
+            <p className="hint">Nothing is hidden.</p>
+          )}
+          {hidden.map((comment) => (
+            <CommentView
+              key={comment.id}
+              videoId={videoId}
+              comment={comment}
+              onChanged={(changed) =>
+                setHidden((current) => current.map((item) => (item.id === changed.id ? changed : item)))
+              }
+              onDeleted={() => {
+                setHidden((current) => current.filter((item) => item.id !== comment.id));
+                setHiddenTotal((current) => current - 1);
+                router.refresh();
+              }}
+            >
+              <p className="hint">{comment.parentId ? "A reply, hidden." : "Hidden."}</p>
+              <div className="comment-actions">
+                <button className="button button-secondary" type="button" onClick={() => unhide(comment)}>
+                  Unhide
+                </button>
+              </div>
+            </CommentView>
+          ))}
+          {hiddenMore && !hiddenLoading && (
+            <button className="button button-secondary" type="button" onClick={() => loadHidden()}>
+              Load more hidden comments
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
       {signedIn ? (
         <CommentForm
           videoId={videoId}
@@ -392,6 +545,7 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
                 current.map((item) => (item.id === changed.id ? { ...changed, replyCount: item.replyCount } : item)),
               )
             }
+            onHidden={isOwner ? moderated : undefined}
             onDeleted={() => {
               setCount((current) => current - 1);
               // With Replies it stays as a placeholder; without, it disappears.
@@ -406,6 +560,8 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
               videoId={videoId}
               comment={comment}
               signedIn={signedIn}
+              isOwner={isOwner}
+              onReplyHidden={moderated}
               onPosted={() => {
                 setCount((current) => current + 1);
                 setComments((current) =>
@@ -434,6 +590,8 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
         <button className="button button-secondary" type="button" onClick={() => loadNext()}>
           Load more comments
         </button>
+      )}
+        </>
       )}
     </section>
   );

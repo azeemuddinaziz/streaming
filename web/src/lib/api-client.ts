@@ -210,8 +210,10 @@ export type WatchVideo = {
   channelName: string;
   createdAt: string;
   views: number;
-  // Visible Comments and Replies together.
+  // The Comments and Replies anyone sees, together.
   comments: number;
+  // The signed-in person owns this Video, so can moderate its Comments.
+  isOwner: boolean;
   // Where the master playlist is served, on the API. Only for a ready Video.
   playlistPath?: string;
 };
@@ -377,6 +379,8 @@ export type Comment = {
   // The signed-in person wrote it, so they can edit and delete it.
   isAuthor: boolean;
   edited: boolean;
+  // Hidden by the Video's owner. Only the owner is ever told.
+  hidden: boolean;
   // A deleted Comment that still has Replies: no author and no text.
   deleted: boolean;
   createdAt: string;
@@ -488,6 +492,52 @@ export async function deleteComment(
 
     const result = await response.json().catch(() => ({}));
     return { ok: false, message: result.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// The Video's owner hides a Comment or Reply (it is not deleted), or brings it
+// back. Called from the browser.
+export async function setCommentHidden(
+  videoId: string,
+  commentId: string,
+  hidden: boolean,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}/${hidden ? "hide" : "unhide"}`,
+      { method: "POST", credentials: "include" },
+    );
+    if (response.ok) return { ok: true };
+
+    const result = await response.json().catch(() => ({}));
+    return { ok: false, message: result.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+export type HiddenCommentsResult =
+  | { ok: true; comments: Comment[]; hasMore: boolean; total: number }
+  | { ok: false; message: string };
+
+// One page of the Comments and Replies the owner has hidden, with how many
+// there are. Called from the browser.
+export async function getHiddenComments(
+  videoId: string,
+  page: number,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<HiddenCommentsResult> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/hidden?page=${page}`,
+      { credentials: "include" },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, message: result.msg ?? "Something went wrong." };
+    return { ok: true, comments: result.comments, hasMore: result.hasMore, total: result.total };
   } catch {
     return { ok: false, message: UNREACHABLE };
   }
