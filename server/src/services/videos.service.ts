@@ -74,6 +74,8 @@ export const VideoService = {
       channelName: video.channel.user.name,
       createdAt: video.createdAt,
       views: video._count.views,
+      // Visible Comments and Replies.
+      comments: video._count.comments,
     };
     if (status !== "READY" || !video.masterPlaylistKey) return base;
 

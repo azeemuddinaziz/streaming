@@ -27,6 +27,7 @@ export async function startTestApi() {
 
 // Empties the test database. Child tables first.
 export async function resetDatabase() {
+  await prisma.comment.deleteMany();
   await prisma.view.deleteMany();
   await prisma.rendition.deleteMany();
   await prisma.upload.deleteMany();

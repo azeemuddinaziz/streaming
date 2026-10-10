@@ -210,6 +210,8 @@ export type WatchVideo = {
   channelName: string;
   createdAt: string;
   views: number;
+  // Visible Comments and Replies together.
+  comments: number;
   // Where the master playlist is served, on the API. Only for a ready Video.
   playlistPath?: string;
 };
@@ -363,5 +365,80 @@ export async function getPublicVideos(
     return { ok: true, ...(await response.json()) };
   } catch {
     return { ok: false };
+  }
+}
+
+export type Comment = {
+  id: string;
+  parentId: string | null;
+  body: string;
+  authorName: string;
+  isChannelOwner: boolean;
+  createdAt: string;
+  replyCount: number;
+};
+
+export const COMMENT_MAX = 1000;
+
+export type CommentPageResult =
+  | { ok: true; comments: Comment[]; hasMore: boolean }
+  | { ok: false; message: string };
+
+// One page of a Video's top-level Comments. Called from the browser.
+export async function getComments(
+  videoId: string,
+  page: number,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<CommentPageResult> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments?page=${page}`,
+      { credentials: "include" },
+    );
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, message: body.msg ?? "Something went wrong." };
+    return { ok: true, comments: body.comments, hasMore: body.hasMore };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// The Replies to a top-level Comment. Called from the browser.
+export async function getReplies(
+  videoId: string,
+  commentId: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; replies: Comment[] } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}/replies`,
+      { credentials: "include" },
+    );
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, message: body.msg ?? "Something went wrong." };
+    return { ok: true, replies: body.replies };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// Writes a Comment, or a Reply when `parentId` is given. Called from the browser.
+export async function postComment(
+  videoId: string,
+  input: { body: string; parentId?: string },
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; comment: Comment } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok && body.comment) return { ok: true, comment: body.comment };
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
   }
 }

@@ -141,6 +141,25 @@ components:
         createdAt: { type: string, format: date-time }
         channelName: { type: string }
         thumbnailPath: { type: string, nullable: true }
+    Comment:
+      type: object
+      description: A Comment, or a Reply when `parentId` is set. The text is plain; show it as text, never as markup.
+      properties:
+        id: { type: string, format: uuid }
+        parentId: { type: string, format: uuid, nullable: true, description: "The top-level Comment a Reply belongs to; null for a top-level Comment." }
+        body: { type: string, maxLength: 1000 }
+        authorName: { type: string }
+        isChannelOwner: { type: boolean, description: "The author owns the Video." }
+        createdAt: { type: string, format: date-time }
+        replyCount: { type: integer, description: "Visible Replies; always 0 on a Reply." }
+      example:
+        id: 3f2b6c1e-0d54-4c0a-9a7b-6f1d2e8a4b90
+        parentId: null
+        body: Lovely trip!
+        authorName: grace-hopper
+        isChannelOwner: false
+        createdAt: "2026-10-02T10:00:00.000Z"
+        replyCount: 1
     ChannelVideo:
       type: object
       properties:
@@ -162,6 +181,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { msg: User not Authenticated. }
+    NotReadyForComments:
+      description: The Video is not READY.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { msg: This video is not ready for comments. }
     NotFound:
       description: A missing or deleted Video, or one that is not yours.
       content:
@@ -561,6 +586,7 @@ paths:
                       channelName: { type: string }
                       createdAt: { type: string, format: date-time }
                       views: { type: integer }
+                      comments: { type: integer, description: "Visible Comments and Replies together." }
                       playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }
               example:
                 video:
@@ -571,6 +597,7 @@ paths:
                   channelName: ada-lovelace
                   createdAt: "2026-10-01T09:30:00.000Z"
                   views: 12
+                  comments: 3
                   playlistPath: /api/v1/media/eyJhbGciOi.../master.m3u8
         "404": { $ref: "#/components/responses/NotFound" }
   /videos/{id}/views:
@@ -602,6 +629,102 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: This video is not ready to be watched. }
+  /videos/{id}/comments:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    get:
+      tags: [Watching]
+      summary: List a video's Comments
+      description: |
+        Top-level Comments, newest first, 20 per page. Open to anyone who can watch the Video; a
+        token, if sent, identifies you. A missing or deleted Video, or a PRIVATE one to anyone but
+        its owner, is 404; a Video that is not READY is 409. A missing or invalid `page` is 1.
+        Replies are loaded per Comment (see **List a Comment's Replies**).
+      security: [{}, { cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
+    post:
+      tags: [Watching]
+      summary: Write a Comment or a Reply
+      description: |
+        Signed in only. `body` is plain text, trimmed, 1 to 1000 characters. With `parentId` it is a
+        Reply; answering a Reply attaches to the same top-level Comment. The target must be a
+        visible Comment of this Video, else 409. Same Video rules as listing; a PRIVATE Video takes
+        Comments only from its owner.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+                parentId: { type: string, format: uuid, description: "The Comment to answer." }
+            example: { body: Lovely trip! }
+      responses:
+        "201":
+          description: The new Comment.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comment: { $ref: "#/components/schemas/Comment" }
+        "400":
+          description: The body is missing, blank, not text or over 1000 characters.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Write something before posting. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY, or the Comment to answer is missing, deleted or hidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: That comment can no longer be answered. }
+  /videos/{id}/comments/{commentId}/replies:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid }, description: A top-level Comment's id. }
+    get:
+      tags: [Watching]
+      summary: List a Comment's Replies
+      description: |
+        Visible Replies to a top-level Comment, oldest first, all in one response. Same access as
+        **List a video's Comments**; an unknown or non-top-level Comment is 404.
+      security: [{}, { cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The Replies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replies:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/NotReadyForComments" }
   /media/{token}/{path}:
     get:
       tags: [Watching]

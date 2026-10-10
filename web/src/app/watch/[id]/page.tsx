@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { cache } from "react";
+import { CommentSection } from "@/components/CommentSection";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { getApiBaseUrl, getWatchVideo } from "@/lib/api-client";
+import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function WatchPage({ params }: Props) {
   }
 
   const { video } = result;
+  const signedIn = video.status === "READY" && (await getCurrentUser((await cookies()).toString())) !== null;
   const title = video.title ?? "Untitled video";
   // The browser reaches the API at the public address, not the server-side one.
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
@@ -77,6 +79,9 @@ export default async function WatchPage({ params }: Props) {
         {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
       {video.description && <p className="description">{video.description}</p>}
+      {video.status === "READY" && (
+        <CommentSection videoId={video.id} initialCount={video.comments} signedIn={signedIn} />
+      )}
     </section>
   );
 }

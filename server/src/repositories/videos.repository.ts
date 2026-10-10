@@ -1,5 +1,6 @@
 import type { Visibility } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
+import { visibleComments } from "./comments.repository.ts";
 
 export class VideoRepository {
   static async listForUser(userId: string) {
@@ -34,8 +35,18 @@ export class VideoRepository {
       where: { id: videoId, deletedAt: null },
       include: {
         channel: { select: { userId: true, user: { select: { name: true } } } },
-        _count: { select: { views: true } },
+        _count: {
+          select: { views: true, comments: { where: visibleComments } },
+        },
       },
+    });
+  }
+
+  // What Comments need to know about a Video.
+  static async findForComments(videoId: string) {
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
+      select: { id: true, status: true, visibility: true, channel: { select: { userId: true } } },
     });
   }
 

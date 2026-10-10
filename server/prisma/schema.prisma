@@ -22,6 +22,7 @@ model User {
   password String
   channel  Channel?
   uploads  Upload[]
+  comments Comment[]
 }
 
 model Channel {
@@ -64,6 +65,7 @@ model Video {
   thumbnailKey      String?
   renditions        Rendition[]
   views             View[]
+  comments          Comment[]
 
   @@index([channelId])
 }
@@ -116,4 +118,30 @@ model View {
   createdAt DateTime @default(now())
 
   @@unique([videoId, viewerKey, day])
+}
+
+// Plain text a signed-in User wrote on a Video. A Reply has a `parentId`;
+// conversations are one level deep, so a parent is always a top-level Comment.
+// `editedAt`, `deletedAt` and `hiddenAt` are for editing, deleting and hiding,
+// which later tickets build; every read path must leave out a Comment that has
+// `deletedAt` or `hiddenAt` unless it is there to show a placeholder or to the owner.
+// The Video's visible-Comment count does not yet leave out Replies under a hidden or
+// deleted parent; the hiding ticket must.
+model Comment {
+  id        String    @id @default(uuid())
+  videoId   String
+  video     Video     @relation(fields: [videoId], references: [id])
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+  parentId  String?
+  parent    Comment?  @relation("Replies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("Replies")
+  body      String
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+  hiddenAt  DateTime?
+
+  @@index([videoId, parentId, createdAt])
+  @@index([parentId, createdAt])
 }
