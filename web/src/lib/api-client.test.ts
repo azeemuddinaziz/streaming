@@ -5,6 +5,8 @@ import {
   checkApiHealth,
   deleteVideo,
   getChannelPage,
+  deleteComment,
+  editComment,
   getComments,
   getReplies,
   postComment,
@@ -447,5 +449,38 @@ describe("Comments", () => {
     stub = undefined;
     const gone = await getReplies("v1", "c", baseUrl);
     expect(gone.ok).toBe(false);
+  });
+});
+
+describe("editing and deleting a Comment", () => {
+  it("sends PATCH with the text and DELETE, and reports the API's answer", async () => {
+    const seen: string[] = [];
+    let sent = "";
+    stub = createServer((req, res) => {
+      let data = "";
+      req.on("data", (chunk) => (data += chunk));
+      req.on("end", () => {
+        seen.push(`${req.method} ${req.url}`);
+        sent = data;
+        if (req.method === "DELETE") return res.writeHead(204).end();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ comment: { id: "c1", edited: true } }));
+      });
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await editComment("v1", "c1", "new words", baseUrl)).toEqual({
+      ok: true,
+      comment: { id: "c1", edited: true },
+    });
+    expect(JSON.parse(sent)).toEqual({ body: "new words" });
+    expect(await deleteComment("v1", "c1", baseUrl)).toEqual({ ok: true });
+    expect(seen).toEqual(["PATCH /api/v1/videos/v1/comments/c1", "DELETE /api/v1/videos/v1/comments/c1"]);
+
+    await new Promise((resolve) => stub!.close(resolve));
+    const missing = await startStubApi(404);
+    expect(await editComment("v1", "c1", "x", missing)).toEqual({ ok: false, message: "stub" });
+    expect(await deleteComment("v1", "c1", missing)).toEqual({ ok: false, message: "stub" });
   });
 });

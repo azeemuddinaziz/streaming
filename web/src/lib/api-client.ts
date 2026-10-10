@@ -371,9 +371,14 @@ export async function getPublicVideos(
 export type Comment = {
   id: string;
   parentId: string | null;
-  body: string;
-  authorName: string;
+  body: string | null;
+  authorName: string | null;
   isChannelOwner: boolean;
+  // The signed-in person wrote it, so they can edit and delete it.
+  isAuthor: boolean;
+  edited: boolean;
+  // A deleted Comment that still has Replies: no author and no text.
+  deleted: boolean;
   createdAt: string;
   replyCount: number;
 };
@@ -438,6 +443,51 @@ export async function postComment(
     const body = await response.json().catch(() => ({}));
     if (response.ok && body.comment) return { ok: true, comment: body.comment };
     return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// Changes the text of the signed-in person's own Comment. Called from the browser.
+export async function editComment(
+  videoId: string,
+  commentId: string,
+  body: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; comment: Comment } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}`,
+      {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.comment) return { ok: true, comment: result.comment };
+    return { ok: false, message: result.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+// Deletes the signed-in person's own Comment. Called from the browser.
+export async function deleteComment(
+  videoId: string,
+  commentId: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}`,
+      { method: "DELETE", credentials: "include" },
+    );
+    if (response.ok) return { ok: true };
+
+    const result = await response.json().catch(() => ({}));
+    return { ok: false, message: result.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };
   }

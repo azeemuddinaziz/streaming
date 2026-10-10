@@ -16,6 +16,8 @@ router.get(
   CommentController.replies,
 );
 router.post("/:id/comments", AuthenticationMiddleware.verifyToken, CommentController.create);
+router.patch("/:id/comments/:commentId", AuthenticationMiddleware.verifyToken, CommentController.edit);
+router.delete("/:id/comments/:commentId", AuthenticationMiddleware.verifyToken, CommentController.remove);
 router.patch("/:id", AuthenticationMiddleware.verifyToken, VideoController.update);
 router.delete("/:id", AuthenticationMiddleware.verifyToken, VideoController.remove);
 router.put(

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   COMMENT_MAX,
+  deleteComment,
+  editComment,
   getComments,
   getReplies,
   postComment,
@@ -12,9 +14,61 @@ import {
 
 type Props = { videoId: string; initialCount: number; signedIn: boolean };
 
-// The Comment text is rendered as a React text node, so markup and links in it
-// are shown as written and never become elements.
-function CommentView({ comment, children }: { comment: Comment; children?: React.ReactNode }) {
+// One Comment or Reply. The text is rendered as a React text node, so markup
+// and links in it are shown as written and never become elements. The author
+// gets Edit and Delete here, with inline validation and a saved state.
+function CommentView({
+  videoId,
+  comment,
+  onChanged,
+  onDeleted,
+  children,
+}: {
+  videoId: string;
+  comment: Comment;
+  onChanged: (comment: Comment) => void;
+  onDeleted: () => void;
+  children?: React.ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(comment.body ?? "");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string>();
+  const [saved, setSaved] = useState(false);
+
+  if (comment.deleted) {
+    return (
+      <article className="comment">
+        <p className="hint">This comment was deleted.</p>
+        {children}
+      </article>
+    );
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (text.trim() === "") return setMessage("Write something before saving.");
+    setBusy(true);
+    setMessage(undefined);
+    const result = await editComment(videoId, comment.id, text);
+    setBusy(false);
+    if (!result.ok) return setMessage(result.message);
+    setEditing(false);
+    setSaved(true);
+    onChanged(result.comment);
+  }
+
+  async function remove() {
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    setBusy(true);
+    setMessage(undefined);
+    const result = await deleteComment(videoId, comment.id);
+    setBusy(false);
+    if (result.ok) onDeleted();
+    else setMessage(result.message);
+  }
+
+  const editId = `edit-${comment.id}`;
   return (
     <article className="comment">
       <p className="hint">
@@ -24,8 +78,65 @@ function CommentView({ comment, children }: { comment: Comment; children?: React
         <time dateTime={comment.createdAt}>
           {new Date(comment.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
         </time>
+        {comment.edited && " · edited"}
       </p>
-      <p className="comment-body">{comment.body}</p>
+      {editing ? (
+        <form className="form comment-form" onSubmit={save}>
+          <div className="field">
+            <label htmlFor={editId}>Edit your comment</label>
+            <textarea
+              id={editId}
+              rows={3}
+              maxLength={COMMENT_MAX}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              autoFocus
+            />
+            <p className="hint">
+              {text.length} / {COMMENT_MAX}
+            </p>
+          </div>
+          <div className="comment-actions">
+            <button className="button" type="submit" disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setEditing(false);
+                setText(comment.body ?? "");
+                setMessage(undefined);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="comment-body">{comment.body}</p>
+      )}
+      {comment.isAuthor && !editing && (
+        <div className="comment-actions">
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => {
+              setText(comment.body ?? "");
+              setSaved(false);
+              setEditing(true);
+            }}
+          >
+            Edit
+          </button>
+          <button className="button button-secondary" type="button" onClick={remove} disabled={busy}>
+            {busy ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      )}
+      {saved && !editing && <p role="status" className="hint">Saved.</p>}
+      {message && <p role="alert" className="form-error">{message}</p>}
       {children}
     </article>
   );
@@ -103,11 +214,13 @@ function Replies({
   comment,
   signedIn,
   onPosted,
+  onReplyDeleted,
 }: {
   videoId: string;
   comment: Comment;
   signedIn: boolean;
   onPosted: () => void;
+  onReplyDeleted: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [replies, setReplies] = useState<Comment[]>();
@@ -139,11 +252,11 @@ function Replies({
             {open ? "Hide" : "Show"} {comment.replyCount} {comment.replyCount === 1 ? "reply" : "replies"}
           </button>
         )}
-        {signedIn && answering === undefined && (
+        {signedIn && !comment.deleted && answering === undefined && (
           <button
             className="button button-secondary"
             type="button"
-            onClick={() => setAnswering(comment.authorName)}
+            onClick={() => setAnswering(comment.authorName ?? "")}
           >
             Reply
           </button>
@@ -161,12 +274,23 @@ function Replies({
             </p>
           )}
           {replies?.map((reply) => (
-            <CommentView key={reply.id} comment={reply}>
-              {signedIn && (
+            <CommentView
+              key={reply.id}
+              videoId={videoId}
+              comment={reply}
+              onChanged={(changed) =>
+                setReplies((current) => current?.map((item) => (item.id === changed.id ? changed : item)))
+              }
+              onDeleted={() => {
+                setReplies((current) => current?.filter((item) => item.id !== reply.id));
+                onReplyDeleted();
+              }}
+            >
+              {signedIn && !comment.deleted && (
                 <button
                   className="button button-secondary"
                   type="button"
-                  onClick={() => setAnswering(reply.authorName)}
+                  onClick={() => setAnswering(reply.authorName ?? "")}
                 >
                   Reply
                 </button>
@@ -259,7 +383,25 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
 
       <div className="comment-list">
         {comments.map((comment) => (
-          <CommentView key={comment.id} comment={comment}>
+          <CommentView
+            key={comment.id}
+            videoId={videoId}
+            comment={comment}
+            onChanged={(changed) =>
+              setComments((current) =>
+                current.map((item) => (item.id === changed.id ? { ...changed, replyCount: item.replyCount } : item)),
+              )
+            }
+            onDeleted={() => {
+              setCount((current) => current - 1);
+              // With Replies it stays as a placeholder; without, it disappears.
+              setComments((current) =>
+                comment.replyCount > 0
+                  ? current.map((item) => (item.id === comment.id ? { ...item, deleted: true, isAuthor: false } : item))
+                  : current.filter((item) => item.id !== comment.id),
+              );
+            }}
+          >
             <Replies
               videoId={videoId}
               comment={comment}
@@ -270,6 +412,17 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
                   current.map((item) =>
                     item.id === comment.id ? { ...item, replyCount: item.replyCount + 1 } : item,
                   ),
+                );
+              }}
+              onReplyDeleted={() => {
+                setCount((current) => current - 1);
+                // A placeholder goes with its last Reply.
+                setComments((current) =>
+                  current.flatMap((item) => {
+                    if (item.id !== comment.id) return [item];
+                    const replyCount = item.replyCount - 1;
+                    return item.deleted && replyCount === 0 ? [] : [{ ...item, replyCount }];
+                  }),
                 );
               }}
             />
