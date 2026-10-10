@@ -218,6 +218,19 @@ a:hover {
   font: inherit;
 }
 
+.field-check label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.field-check input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  accent-color: var(--color-accent);
+}
+
 .hint {
   margin: 0;
   font-size: 0.875rem;

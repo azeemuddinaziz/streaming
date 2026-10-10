@@ -33,7 +33,7 @@ function CommentView({
   onChanged,
   onDeleted,
   onHidden,
-  canEdit = true,
+  canEdit,
   children,
 }: {
   videoId: string;
@@ -43,7 +43,7 @@ function CommentView({
   // Given only to the Video's owner: shows Hide on a Comment that is not hidden.
   onHidden?: () => void;
   // False while Comments are off: the author can still delete, not edit.
-  canEdit?: boolean;
+  canEdit: boolean;
   children?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);

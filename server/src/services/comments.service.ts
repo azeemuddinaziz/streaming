@@ -145,9 +145,9 @@ export const CommentService = {
   async edit(authorId: string, videoId: string, commentId: string, body: unknown) {
     enrich({ commentAction: "edit", commentId });
     const { ownerId, commentsEnabled } = await commentableVideo(authorId, videoId);
-    requireCommentsOn(commentsEnabled);
+    // Someone else's Comment is not found whatever they send; then the setting; only then the text.
     const comment = await ownComment(videoId, commentId, authorId);
-    // Someone else's Comment is not found whatever they send; only then is the text checked.
+    requireCommentsOn(commentsEnabled);
     const text = commentText(body);
 
     // Saving the same words is not an edit.

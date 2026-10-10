@@ -111,6 +111,8 @@ describe("while Comments are off", () => {
     const edit = (who: Who) =>
       api.request(`/videos/${id}/comments/${comment.id}`, { method: "PATCH", json: { body: "x" }, headers: who.bearer });
     expect((await edit(grace)).status).toBe(409);
+    // Someone else's Comment stays not found, whatever the setting.
+    expect((await edit(ada)).status).toBe(404);
     expect(await prisma.comment.count()).toBe(2);
     expect((await prisma.comment.findUniqueOrThrow({ where: { id: comment.id } })).body).toBe("before");
   });

@@ -65,7 +65,7 @@ export function VideoDetailsForm({ video }: { video: StudioVideo }) {
             Unlisted and public need both a title and a description.
           </p>
         </div>
-        <div className="field">
+        <div className="field field-check">
           <label htmlFor={`comments-${video.id}`}>
             <input
               id={`comments-${video.id}`}
