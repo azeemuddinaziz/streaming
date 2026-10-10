@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { HttpError } from "../errors.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { toAccount } from "../utils/account.ts";
 import { setTokenCookie } from "../utils/cookie.ts";
@@ -16,7 +17,7 @@ export class AuthenticationMiddleware {
     next: NextFunction,
   ) => {
     const unauthenticated = () =>
-      res.status(401).json({ msg: "User not Authenticated." });
+      next(new HttpError(401, "User not Authenticated."));
 
     const found = pickToken(req.headers.authorization, req.headers.cookie);
     if (!found) return unauthenticated();

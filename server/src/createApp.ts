@@ -1,29 +1,14 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express, { Router, type ErrorRequestHandler } from "express";
-import { HttpError } from "./errors.ts";
-import { enrich, mountAt, wideEvents } from "./lib/wide-event.ts";
+import express, { Router } from "express";
+import { handleErrors } from "./lib/handle-errors.ts";
+import { mountAt, wideEvents } from "./lib/wide-event.ts";
 import channelsRouter from "./routes/channels.routes.ts";
 import mediaRouter from "./routes/media.routes.ts";
 import uploadsRouter from "./routes/uploads.routes.ts";
 import usersRouter from "./routes/users.routes.ts";
 import videoRouter from "./routes/videos.routes.ts";
 import webhooksRouter from "./routes/webhooks.routes.ts";
-
-const handleErrors: ErrorRequestHandler = (error, req, res, _next) => {
-  if (error instanceof HttpError) {
-    return res.status(error.status).json({ msg: error.message });
-  }
-
-  if ((error as { type?: string }).type === "entity.too.large") {
-    return res.status(413).json({ msg: "That image is over 5 MB." });
-  }
-
-  enrich({
-    errorName: error instanceof Error ? error.name : "NonError",
-  });
-  return res.status(500).json({ msg: "Something went wrong." });
-};
 
 export function createApp() {
   const app = express();

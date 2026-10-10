@@ -64,6 +64,11 @@ describe("wide events", () => {
       path: "/api/v1/channels/nobody",
       status: 404,
     });
+    expect(events[0]?.error).toEqual({
+      type: "HttpError",
+      message: "Channel not found.",
+      expected: true,
+    });
   });
 
   it("adds the user and channel ids of a signed-in request", async () => {
