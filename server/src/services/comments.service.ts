@@ -151,27 +151,27 @@ export const CommentService = {
 
   // The Comments and Replies the owner has hidden, newest first, with how many
   // there are. A page number that is not a whole number from 1 is the first page.
-  async listHidden(ownerCandidate: string, videoId: string, pageParam: unknown) {
+  async listHidden(viewerId: string, videoId: string, pageParam: unknown) {
     enrich({ commentAction: "hidden" });
-    const { isOwner } = await commentableVideo(ownerCandidate, videoId);
+    const { isOwner } = await commentableVideo(viewerId, videoId);
     if (!isOwner) throw commentNotFound();
     const parsed = Number(pageParam);
     const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
 
     const [rows, total] = await Promise.all([
-      CommentRepository.listHidden(videoId, ownerCandidate, (page - 1) * PAGE_SIZE, PAGE_SIZE),
+      CommentRepository.listHidden(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE),
       CommentRepository.countHidden(videoId),
     ]);
-    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerCandidate, ownerCandidate));
+    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, viewerId, viewerId));
     enrich({ commentCount: comments.length });
     return { comments, page, hasMore: rows.length > PAGE_SIZE, total };
   },
 
   // The Video's owner hides a Comment or Reply, or brings it back. Anyone else
   // is told it is not found. Hiding is not deletion.
-  async setHidden(ownerCandidate: string, videoId: string, commentId: string, hidden: boolean) {
+  async setHidden(viewerId: string, videoId: string, commentId: string, hidden: boolean) {
     enrich({ commentAction: hidden ? "hide" : "unhide", commentId });
-    const { isOwner } = await commentableVideo(ownerCandidate, videoId);
+    const { isOwner } = await commentableVideo(viewerId, videoId);
     if (!isOwner || !(await CommentRepository.exists(videoId, commentId))) throw commentNotFound();
     await CommentRepository.setHidden(commentId, hidden);
   },

@@ -122,9 +122,10 @@ model View {
 
 // Plain text a signed-in User wrote on a Video. A Reply has a `parentId`;
 // conversations are one level deep, so a parent is always a top-level Comment.
-// `editedAt`, `deletedAt` and `hiddenAt` are for editing, deleting and hiding,
-// which later tickets build; every read path must leave out a Comment that has
-// `deletedAt` or `hiddenAt` unless it is there to show a placeholder or to the owner.
+// `deletedAt` and `hiddenAt` are flags, nothing is removed (ADR 0001). Hiding a
+// Comment hides its Replies by derivation, so a Reply's own `hiddenAt` is only
+// for Replies hidden on their own. Reads go through the per-viewer filters in
+// CommentRepository; `editedAt` is set when the author changes the text.
 model Comment {
   id        String    @id @default(uuid())
   videoId   String
