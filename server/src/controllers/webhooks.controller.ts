@@ -42,7 +42,7 @@ export const WebhooksController = {
 
     // The name comes from the caller, so it is cut short before it is logged.
     enrich({
-      tusdHook: String(hookName).slice(0, 40),
+      ...(hookName ? { tusdHook: String(hookName).slice(0, 40) } : {}),
       ...(Upload?.ID ? { tusdUploadFingerprint: fingerprint(Upload.ID) } : {}),
     });
 

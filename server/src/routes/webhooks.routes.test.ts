@@ -383,6 +383,28 @@ describe("tusd hook events", () => {
     expect(events[0]).not.toHaveProperty("rejectStatus");
   });
 
+  it("records an acknowledged hook that did nothing, and a finish that was refused, as ignored", async () => {
+    await post({ ...hook("pre-create"), Type: "post-receive" });
+    expect(events[0]).toMatchObject({ tusdHook: "post-receive", outcome: "ignored" });
+
+    await post(hook("post-finish", { id: "nobody" }));
+    expect(events[1]).toMatchObject({ tusdHook: "post-finish", outcome: "ignored" });
+  });
+
+  it("records a finished upload as allowed, with the Video it became", async () => {
+    const { user, token } = await signedUp();
+    await startedUpload(user.id);
+
+    await post(hook("post-finish", { id: "abc123", headers: { Authorization: [`Bearer ${token}`] } }));
+
+    expect(events[0]).toMatchObject({
+      tusdHook: "post-finish",
+      outcome: "allowed",
+      videoAction: "create",
+      uploadId: expect.any(String),
+    });
+  });
+
   it("records an unhandled hook type on the event and writes no console line", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
