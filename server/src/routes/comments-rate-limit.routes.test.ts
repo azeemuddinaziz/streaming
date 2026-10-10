@@ -74,6 +74,20 @@ describe("rate limiting writing Comments", () => {
     expect(await prisma.comment.count()).toBe(5);
   });
 
+  it("exposes Retry-After to the web app's origin so the browser can read it", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await video(ada);
+    await seed(id, ada, 5, 5);
+    process.env.WEB_ORIGIN = "http://localhost:3001";
+    const refused = await api.request(`/videos/${id}/comments`, {
+      method: "POST",
+      json: { body: "x" },
+      headers: { ...ada.bearer, Origin: "http://localhost:3001" },
+    });
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("Access-Control-Expose-Headers")).toMatch(/Retry-After/);
+  });
+
   it("is per User, per minute, and leaves a User under the limit alone", async () => {
     const ada = await person("Ada-Lovelace");
     const grace = await person("Grace-Hopper");
