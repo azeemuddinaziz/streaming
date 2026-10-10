@@ -32,7 +32,7 @@ export const UploadService = {
       new Date(now.getTime() - UNFINISHED_LIFETIME_MS),
     );
 
-    let failed = 0;
+    const failed: string[] = [];
     for (const upload of stale) {
       if (!(await UploadRepository.claimForDiscard(upload.id))) continue;
 
@@ -40,13 +40,15 @@ export const UploadService = {
         await removeBytes(upload.tusId);
       } catch (error) {
         await UploadRepository.releaseDiscardClaim(upload.id);
-        failed += 1;
-        console.error(`Could not discard upload ${upload.tusId}:`, error);
+        failed.push(upload.id);
       }
     }
 
-    if (failed > 0) {
-      throw new Error(`Could not discard ${failed} of ${stale.length} stale uploads.`);
+    if (failed.length > 0) {
+      // The job runner keeps this message with the failed job.
+      throw new Error(
+        `Could not discard ${failed.length} of ${stale.length} stale uploads: ${failed.join(", ")}.`,
+      );
     }
     return stale.length;
   },

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { HttpError } from "../errors.ts";
 import { mediaPath, signMediaToken } from "../lib/media-token.ts";
+import { enrich, errorType } from "../lib/wide-event.ts";
 import { createStorage } from "../lib/storage.ts";
 import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
@@ -162,6 +163,7 @@ export const VideoService = {
   // Deletes a Video from everyone's view. It is only flagged, and its rows and
   // files stay (ADR 0001). Someone else's, a missing or an already deleted Video is not found.
   async remove(userId: string, videoId: string) {
+    enrich({ videoId, videoAction: "delete" });
     if (!(await VideoRepository.softDelete(videoId, userId))) {
       throw new HttpError(404, "Video not found.");
     }
@@ -170,17 +172,19 @@ export const VideoService = {
   // Processes a failed Video again from its kept original. Someone else's Video
   // is reported as not found, the same as one that does not exist.
   async retryProcessing(userId: string, videoId: string) {
+    enrich({ videoId, videoAction: "retry" });
     const video = await VideoRepository.findOwned(videoId, userId);
     if (!video) throw new HttpError(404, "Video not found.");
 
     if (!(await VideoRepository.restartProcessing(videoId))) {
       throw new HttpError(409, "Only a failed video can be retried.");
     }
+    enrich({ statusFrom: "FAILED", statusTo: "PROCESSING" });
 
     try {
       await queueVideoProcessing(videoId);
     } catch (error) {
-      console.error(`Could not queue processing of video ${videoId}:`, error);
+      enrich({ queueError: { type: errorType(error) }, statusTo: "FAILED" });
       await VideoRepository.markFailed(videoId);
       throw new HttpError(503, "Processing could not be started. Try again in a moment.");
     }
@@ -194,6 +198,7 @@ export const VideoService = {
       throw new HttpError(400, "Send the details as a JSON object.");
     }
     const fields = body as Record<string, unknown>;
+    enrich({ videoId, videoAction: "update" });
     const video = await VideoRepository.findOwned(videoId, userId);
     if (!video) throw new HttpError(404, "Video not found.");
 
@@ -221,6 +226,14 @@ export const VideoService = {
     if (!(await VideoRepository.updateDetails(video, data))) {
       throw new HttpError(409, "This video was changed elsewhere. Reload and try again.");
     }
+    // Text is never logged, only whether it changed.
+    enrich({
+      titleChanged: result.title !== video.title,
+      descriptionChanged: result.description !== video.description,
+      ...(result.visibility !== video.visibility
+        ? { visibilityFrom: video.visibility, visibilityTo: result.visibility }
+        : {}),
+    });
     return { id: videoId, ...result };
   },
 };

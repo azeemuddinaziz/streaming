@@ -26,6 +26,12 @@ export function emit(event: WideEvent) {
   }
 }
 
+// The class of a failure, for events that record a failure without its
+// message (a driver error can carry connection details).
+export function errorType(error: unknown) {
+  return error instanceof Error ? error.name : "NonError";
+}
+
 // Adds fields to the current request's event. Does nothing outside a request.
 export function enrich(fields: WideEvent) {
   try {
