@@ -16,8 +16,8 @@ export const CommentController = {
   },
 
   async create(req: Request, res: Response) {
-    const body = req.body ?? {};
-    const comment = await CommentService.create(req.user!.id, req.params.id as string, body.body, body.parentId);
+    const { body: text, parentId } = req.body ?? {};
+    const comment = await CommentService.create(req.user!.id, req.params.id as string, text, parentId);
     res.status(201).json({ comment });
   },
 };

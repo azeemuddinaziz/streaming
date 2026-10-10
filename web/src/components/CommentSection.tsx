@@ -19,7 +19,7 @@ function CommentView({ comment, children }: { comment: Comment; children?: React
     <article className="comment">
       <p className="hint">
         <strong>{comment.authorName}</strong>
-        {comment.isChannelOwner && <span className="badge"> Channel owner</span>}
+        {comment.isChannelOwner && <>{" "}<span className="badge">Channel owner</span></>}
         {" · "}
         <time dateTime={comment.createdAt}>
           {new Date(comment.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
@@ -113,7 +113,8 @@ function Replies({
   const [replies, setReplies] = useState<Comment[]>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [answering, setAnswering] = useState(false);
+  // The author being answered, while the Reply form is open.
+  const [answering, setAnswering] = useState<string>();
 
   async function load() {
     setLoading(true);
@@ -138,8 +139,12 @@ function Replies({
             {open ? "Hide" : "Show"} {comment.replyCount} {comment.replyCount === 1 ? "reply" : "replies"}
           </button>
         )}
-        {signedIn && !answering && (
-          <button className="button button-secondary" type="button" onClick={() => setAnswering(true)}>
+        {signedIn && answering === undefined && (
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => setAnswering(comment.authorName)}
+          >
             Reply
           </button>
         )}
@@ -158,7 +163,11 @@ function Replies({
           {replies?.map((reply) => (
             <CommentView key={reply.id} comment={reply}>
               {signedIn && (
-                <button className="button button-secondary" type="button" onClick={() => setAnswering(true)}>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setAnswering(reply.authorName)}
+                >
                   Reply
                 </button>
               )}
@@ -166,14 +175,14 @@ function Replies({
           ))}
         </div>
       )}
-      {answering && (
+      {answering !== undefined && (
         <CommentForm
           videoId={videoId}
           parentId={comment.id}
-          label={`Reply to ${comment.authorName}`}
-          onCancel={() => setAnswering(false)}
+          label={`Reply to ${answering}`}
+          onCancel={() => setAnswering(undefined)}
           onPosted={async (reply) => {
-            setAnswering(false);
+            setAnswering(undefined);
             setOpen(true);
             setReplies((current) => (current ? [...current, reply] : current));
             if (!replies) await load();
@@ -212,7 +221,6 @@ export function CommentSection({ videoId, initialCount, signedIn }: Props) {
   useEffect(() => {
     void loadNext(1);
     // Loads the first page once per Video.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId]);
 
   return (

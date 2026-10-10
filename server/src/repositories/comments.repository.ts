@@ -2,11 +2,11 @@ import { prisma } from "../lib/prisma.ts";
 
 // A Comment that has been deleted or hidden is not shown to Viewers. Later
 // tickets decide who still sees it; until then every read leaves it out.
-const visible = { deletedAt: null, hiddenAt: null } as const;
+export const visibleComments = { deletedAt: null, hiddenAt: null } as const;
 
 const withAuthor = {
   author: { select: { name: true } },
-  _count: { select: { replies: { where: visible } } },
+  _count: { select: { replies: { where: visibleComments } } },
 } as const;
 
 export class CommentRepository {
@@ -14,7 +14,7 @@ export class CommentRepository {
   // row so the caller can tell if another page follows.
   static async listTopLevel(videoId: string, skip: number, take: number) {
     return await prisma.comment.findMany({
-      where: { videoId, parentId: null, ...visible },
+      where: { videoId, parentId: null, ...visibleComments },
       include: withAuthor,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
@@ -25,7 +25,7 @@ export class CommentRepository {
   // All visible Replies to a top-level Comment, oldest first.
   static async listReplies(parentId: string) {
     return await prisma.comment.findMany({
-      where: { parentId, ...visible },
+      where: { parentId, ...visibleComments },
       include: withAuthor,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
@@ -34,7 +34,7 @@ export class CommentRepository {
   // A visible Comment of the Video, with its own parent's visibility.
   static async findVisible(videoId: string, commentId: string) {
     return await prisma.comment.findFirst({
-      where: { id: commentId, videoId, ...visible },
+      where: { id: commentId, videoId, ...visibleComments },
       include: { parent: { select: { id: true, deletedAt: true, hiddenAt: true } } },
     });
   }
