@@ -54,7 +54,7 @@ async function finishUpload(owner: Awaited<ReturnType<typeof signedUp>>, tusId =
       Type: "post-finish",
       Event: {
         Upload: { ID: tusId, Size: 2048, SizeIsDeferred: false, Offset: 2048, MetaData: { filename: "holiday.mp4" } },
-        HTTPRequest: { Method: "PATCH", URI: "/files/", RemoteAddr: "127.0.0.1", Header: owner.bearer ? { Authorization: [owner.bearer.Authorization] } : {} },
+        HTTPRequest: { Method: "PATCH", URI: "/files/", RemoteAddr: "127.0.0.1", Header: { Authorization: [owner.bearer.Authorization] } },
       },
     },
   });
@@ -74,7 +74,6 @@ describe("Video and Upload context on events", () => {
       route: "/api/v1/webhooks/tusd",
       videoId: upload.videoId,
       uploadId: upload.id,
-      tusId: "abc123",
       uploadSize: 2048,
       videoAction: "create",
     });
@@ -89,6 +88,7 @@ describe("Video and Upload context on events", () => {
 
     expect(last()).toMatchObject({
       queueError: { type: "TypeError" },
+      statusFrom: "PROCESSING",
       statusTo: "FAILED",
     });
     expect(JSON.stringify(last())).not.toContain("queue down");

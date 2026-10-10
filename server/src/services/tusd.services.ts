@@ -98,20 +98,19 @@ export const TusdService = {
     const decision = await checkFinisher(upload, httpRequest);
     if (!decision.allowed) return { success: false };
 
+    enrich({ uploadSize: upload.Size });
     const video = await UploadRepository.completeIntoVideo(upload.ID);
     if (video) {
-      enrich({
-        videoId: video.id,
-        uploadId: video.uploadId,
-        tusId: upload.ID,
-        uploadSize: upload.Size,
-        videoAction: "create",
-      });
+      enrich({ videoId: video.id, uploadId: video.uploadId, videoAction: "create" });
       // A Video nobody will process must not wait forever.
       try {
         await queueVideoProcessing(video.id);
       } catch (error) {
-        enrich({ queueError: { type: errorType(error) }, statusTo: "FAILED" });
+        enrich({
+          queueError: { type: errorType(error) },
+          statusFrom: "PROCESSING",
+          statusTo: "FAILED",
+        });
         await VideoRepository.markFailed(video.id);
       }
     }

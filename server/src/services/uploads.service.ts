@@ -40,7 +40,7 @@ export const UploadService = {
         await removeBytes(upload.tusId);
       } catch (error) {
         await UploadRepository.releaseDiscardClaim(upload.id);
-        failed.push(upload.tusId);
+        failed.push(upload.id);
       }
     }
 
