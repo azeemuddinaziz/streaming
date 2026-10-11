@@ -450,6 +450,14 @@ progress {
   gap: 0.5rem;
 }
 
+.subscribe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.subscribe .button[aria-pressed="true"],
 .reactions .button[aria-pressed="true"] {
   background: var(--color-accent-soft);
   border-color: var(--color-accent);

@@ -228,6 +228,10 @@ export type WatchVideo = {
   myReaction: ReactionKind | null;
   // Only the owner is told how many Dislikes there are.
   dislikes?: number;
+  // The Channel's public Subscriber count, and whether the signed-in person
+  // subscribes (null when signed out).
+  subscribers: number;
+  subscribed: boolean | null;
   // Where the master playlist is served, on the API. Only for a ready Video.
   playlistPath?: string;
 };
@@ -331,6 +335,38 @@ export function reactToComment(
   );
 }
 
+export type SubscriptionState = { subscribed: boolean; subscribers: number };
+
+// Subscribes the signed-in person to a Channel (`subscribe`), or ends it.
+// Called from the browser. Over the limit (429) the message says how long to wait.
+export async function setSubscription(
+  channelName: string,
+  subscribe: boolean,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; state: SubscriptionState } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(channelName)}/subscription`, {
+      method: subscribe ? "PUT" : "DELETE",
+      credentials: "include",
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return { ok: true, state: body };
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get("Retry-After"));
+      return {
+        ok: false,
+        message:
+          Number.isFinite(seconds) && seconds > 0
+            ? `Slow down: you can subscribe again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`
+            : "Slow down: you are subscribing too fast.",
+      };
+    }
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
 export const THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024;
 
 // Replaces a Video's Thumbnail with an image of the owner's. Checks the file
@@ -381,6 +417,9 @@ export async function reportView(id: string, baseUrl: string = getApiBaseUrl()):
 
 export type ChannelPage = {
   channel: { name: string };
+  subscribers: number;
+  // Whether the signed-in person subscribes; null when signed out.
+  subscribed: boolean | null;
   videos: { id: string; title: string | null; createdAt: string; thumbnailPath: string | null }[];
 };
 
@@ -389,12 +428,15 @@ export type ChannelResult =
   | { ok: false; reason: "not-found" | "unavailable" };
 
 // For server components: loads a Channel's public page, found by account name.
+// The cookie tells the API who is asking, for `subscribed`.
 export async function getChannelPage(
   name: string,
+  cookie: string,
   baseUrl: string = getApiBaseUrl(),
 ): Promise<ChannelResult> {
   try {
     const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(name)}`, {
+      headers: { Cookie: cookie },
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
