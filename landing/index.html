@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StreamSouk: a video platform I built to learn</title>
+  <meta name="description" content="StreamSouk is a video streaming platform: resumable uploads, HLS transcoding, comments and subscriptions. Watch the demo or run it yourself.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="hero">
+    <div class="wrap">
+      <h1>StreamSouk</h1>
+      <p class="lede">A video streaming platform I built to learn how video, uploads and background processing work end to end.</p>
+      <div class="video" id="demo">
+        <button type="button">
+          <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg></span>
+          <span>Play the demo video</span>
+          <span class="note">Loads from YouTube (privacy-enhanced mode, with captions) only when you press play.</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section aria-labelledby="what">
+      <div class="wrap">
+        <h2 id="what">What you can do</h2>
+        <ul class="plain three">
+          <li><strong>Upload and resume</strong>Send a large video and pick it up again after a dropped connection.</li>
+          <li><strong>Processing with progress</strong>Every upload is transcoded in the background, and the Studio shows how far along it is.</li>
+          <li><strong>Watch</strong>Adaptive streaming that picks a quality for your connection, with a link you can share.</li>
+          <li><strong>Comments and reactions</strong>Comment, reply, like and dislike, with moderation for the owner.</li>
+          <li><strong>Subscriptions</strong>Subscribe to Channels and keep a list of the ones you follow.</li>
+          <li><strong>Studio</strong>Manage your Videos: edit details, set visibility, change the thumbnail, retry or delete.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="engineering">
+      <div class="wrap">
+        <h2 id="engineering">Engineering</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Resumable uploads</h3>
+            <p class="dt">Decision</p>
+            <p>The browser uploads straight to <code>tusd</code>, and Express only handles its hooks.</p>
+            <p class="dt">Why</p>
+            <p>Large files never pass through the API, and an upload can resume. The hooks are where I check ownership and reject a wrong-user finish.</p>
+            <p class="dt">Proof</p>
+            <ul>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/server/src/services/tusd.services.ts">The tusd hook service</a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/CLAUDE.md#resumable-uploads-via-tusd">How the hooks are specified</a></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Background processing</h3>
+            <p class="dt">Decision</p>
+            <p>Jobs are queued with pg-boss in the app's own Postgres, with retries, a failed state and a retry endpoint.</p>
+            <p class="dt">Why</p>
+            <p>It needs no extra infrastructure to run or pay for, and a failed Video ends in a state the owner can see and retry.</p>
+            <p class="dt">Proof</p>
+            <ul>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/server/src/lib/jobs.ts">The job runner</a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/server/src/services/video-processing.service.ts">Video processing and failure handling</a></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Adaptive streaming</h3>
+            <p class="dt">Decision</p>
+            <p>ffmpeg produces HLS renditions and reports progress, and playback goes through short-lived signed media tokens.</p>
+            <p class="dt">Why</p>
+            <p>HLS lets the player adapt to the connection, and tokens keep the storage bucket private.</p>
+            <p class="dt">Proof</p>
+            <ul>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/server/src/lib/ffmpeg.ts">The transcoder</a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/server/src/lib/media-token.ts">Media tokens</a></li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>How I used AI to build this</h3>
+            <p>I built StreamSouk with an AI coding assistant, and I directed it the way I would a junior engineer: I decided what to build and why, and I reviewed everything it produced. Before any feature I worked through the design with it in a question-and-answer session, wrote the domain terms into a glossary and recorded significant decisions as ADRs. Each change then went through a ticket, a feature branch, a code review and a pull request. The project's guidance lives in <code>CLAUDE.md</code>, so the assistant works from the same written rules I do. The part I found hardest, and the part that stayed mine, was deciding what not to build.</p>
+            <p class="dt">Proof</p>
+            <ul>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/CLAUDE.md"><code>CLAUDE.md</code></a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/GLOSSARY.md">The glossary</a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/tree/v2/docs/adr">The ADRs</a></li>
+              <li><a href="https://github.com/azeemuddinaziz/streaming/pulls?q=is%3Apr+is%3Aclosed">The pull requests</a></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="run">
+      <div class="wrap">
+        <h2 id="run">Run it yourself</h2>
+        <p>Pick one. Each shows the commands only; the guide on GitHub has the prerequisites, checks and troubleshooting.</p>
+
+        <div role="tablist" aria-label="How to run StreamSouk" class="tablist-js">
+          <button role="tab" type="button" id="tab-docker" aria-controls="panel-docker" aria-selected="true">Docker</button>
+          <button role="tab" type="button" id="tab-manual" aria-controls="panel-manual" aria-selected="false" tabindex="-1">GitHub (manual)</button>
+        </div>
+
+        <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker">
+          <h3 class="tabs-nojs-title">Docker</h3>
+          <p>Docker is the only prerequisite (about 4 GB of RAM allocated to it).</p>
+<pre tabindex="0"><code>git clone https://github.com/azeemuddinaziz/streaming.git
+cd streaming
+docker compose up</code></pre>
+          <p>Open <strong>http://localhost:3001</strong>. <a href="https://github.com/azeemuddinaziz/streaming#run-with-docker">Full guide on GitHub</a></p>
+        </div>
+
+        <div role="tabpanel" id="panel-manual" aria-labelledby="tab-manual">
+          <h3 class="tabs-nojs-title">GitHub (manual)</h3>
+          <p>You run a Postgres database and four processes: the API, the background worker, the upload server (<code>tusd</code>) and the web app.</p>
+<pre tabindex="0"><code>git clone https://github.com/azeemuddinaziz/streaming.git
+cd streaming
+pnpm install
+
+createdb streamsouk
+createdb streamsouk_test
+
+cp server/.env.example server/.env
+cp web/.env.example web/.env.local
+
+pnpm --filter server generate
+pnpm --filter server exec prisma migrate deploy</code></pre>
+          <p>Set <code>DATABASE_URL</code>, <code>TEST_DATABASE_URL</code> and <code>JWT_SECRET</code> in <code>server/.env</code> first, then start each process in its own terminal from the repo root:</p>
+<pre tabindex="0"><code>pnpm --filter server dev
+pnpm --filter server worker
+pnpm --filter server tusd
+pnpm --filter web dev</code></pre>
+          <p>Open <strong>http://localhost:3001</strong>. <a href="https://github.com/azeemuddinaziz/streaming#run-it-manually">Full guide on GitHub</a></p>
+        </div>
+
+        <h3>Good to know</h3>
+        <ul>
+          <li>Transcoding speed depends on your machine.</li>
+          <li>Share links only work locally, because media and share links use <code>localhost</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="why">
+      <div class="wrap">
+        <h2 id="why">Why there's no live instance</h2>
+        <p>StreamSouk is a video platform: it stores and serves video and transcodes every upload. That costs real money to host, and this is a learning project I fund myself, so there's no public instance right now. You can run the whole thing on your own machine in a few minutes, or watch the demo above.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="support">
+      <div class="wrap">
+        <h2 id="support">Support</h2>
+        <p>If you found this useful, you can leave a tip on GitHub Sponsors. It is a tip jar: no perks, and nothing is unlocked.</p>
+        <a class="button" href="https://github.com/sponsors/azeemuddinaziz/">Tip on GitHub Sponsors</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <ul>
+        <li><a href="https://github.com/azeemuddinaziz/streaming">Repository</a></li>
+        <li><a href="https://github.com/azeemuddinaziz/streaming/blob/v2/LICENSE">MIT license</a></li>
+        <li>Azeemuddin Aziz</li>
+      </ul>
+    </div>
+  </footer>
+</body>
+</html>

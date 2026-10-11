@@ -1,0 +1,6 @@
+{
+  "name": "landing",
+  "private": true,
+  "license": "MIT",
+  "description": "Static landing page for StreamSouk (no build step, deployed from this directory on Vercel)"
+}

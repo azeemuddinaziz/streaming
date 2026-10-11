@@ -1,6 +1,7 @@
 packages:
   - server
   - web
+  - landing
 
 allowBuilds:
   "@prisma/engines": false
