@@ -35,9 +35,11 @@ export function CommentField({ label, value, onChange, error, rows = 3, autoFocu
         aria-describedby={error ? `${hintId} ${errorId}` : hintId}
       />
       <div className="flex flex-wrap items-start justify-between gap-2 text-sm">
-        <p id={errorId} role="alert" className="text-destructive">
-          {error}
-        </p>
+        {error && (
+          <p id={errorId} role="alert" className="text-destructive">
+            {error}
+          </p>
+        )}
         <p id={hintId} className="ml-auto font-mono text-muted-foreground">
           {value.length} / {COMMENT_MAX}
         </p>

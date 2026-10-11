@@ -23,12 +23,23 @@ type Props = {
   commentsEnabled: boolean;
 };
 
-function ErrorRow({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorRow({
+  message,
+  action,
+  onAction,
+  busy = false,
+}: {
+  message: string;
+  action: string;
+  onAction: () => void;
+  busy?: boolean;
+}) {
   return (
     <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm">
       <span className="text-destructive">{message}</span>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-        Retry
+      <Button type="button" variant="outline" size="sm" onClick={onAction} disabled={busy}>
+        {busy && <Spinner />}
+        {action}
       </Button>
     </div>
   );
@@ -103,7 +114,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
         </p>
       )}
 
-      {main.error && <ErrorRow message={main.error} onRetry={() => main.load()} />}
+      {main.error && <ErrorRow message={main.error} action="Retry" onAction={() => main.load()} busy={main.loading} />}
       {showingFirstLoad && <CommentListSkeleton />}
       {main.loaded && main.items.length === 0 && !main.error && (
         <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -164,6 +175,10 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
         </div>
       )}
 
+      <p className="sr-only" role="status" aria-live="polite">
+        {main.loaded ? `${main.items.length} ${main.items.length === 1 ? "comment" : "comments"} shown` : ""}
+      </p>
+
       {main.hasMore && <LoadMore loading={main.loading} onClick={() => main.load()}>Load more comments</LoadMore>}
     </div>
   );
@@ -191,7 +206,9 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
             {(hidden.error || hiddenMessage) && (
               <ErrorRow
                 message={(hidden.error ?? hiddenMessage)!}
-                onRetry={() => (hidden.error ? hidden.load() : setHiddenMessage(undefined))}
+                action={hidden.error ? "Retry" : "Dismiss"}
+                onAction={() => (hidden.error ? hidden.load() : setHiddenMessage(undefined))}
+                busy={hidden.loading}
               />
             )}
             {hidden.loading && !hidden.loaded && <CommentListSkeleton count={2} />}
