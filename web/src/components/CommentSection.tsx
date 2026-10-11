@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ReactionButtons } from "./ReactionButtons";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   COMMENT_MAX,
@@ -15,6 +14,7 @@ import {
   setCommentHidden,
   type Comment,
 } from "@/lib/api-client";
+import { ReactionButtons } from "./ReactionButtons";
 
 type Props = {
   videoId: string;

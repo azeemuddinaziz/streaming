@@ -167,9 +167,9 @@ model Reaction {
   userId    String
   user      User         @relation(fields: [userId], references: [id])
   videoId   String?
-  video     Video?       @relation(fields: [videoId], references: [id])
+  video     Video?       @relation(fields: [videoId], references: [id], onDelete: Restrict)
   commentId String?
-  comment   Comment?     @relation(fields: [commentId], references: [id])
+  comment   Comment?     @relation(fields: [commentId], references: [id], onDelete: Restrict)
   kind      ReactionKind
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
