@@ -76,9 +76,11 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
 
   return (
     <>
-      <video ref={video} className="player" controls playsInline preload="metadata" aria-label={label} />
+      <video ref={video} className="player aspect-video w-full rounded-lg bg-foreground" controls playsInline preload="metadata" aria-label={label} />
       {failed && (
-        <p role="alert">This video could not be played in your browser. Try reloading the page.</p>
+        <p role="alert" className="text-sm text-destructive">
+          This video could not be played in your browser. Try reloading the page.
+        </p>
       )}
     </>
   );

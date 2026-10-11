@@ -1,7 +1,9 @@
 "use client";
 
+import { ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { reactToComment, reactToVideo, type ReactionKind } from "@/lib/api-client";
 
 type Props = {
@@ -53,32 +55,50 @@ export function ReactionButtons(props: Props) {
 
   const count = (n: number) => n.toLocaleString("en");
 
+  const pressed = "aria-pressed:border-primary aria-pressed:bg-secondary aria-pressed:[&_svg]:fill-current";
+
   return (
-    <div className="reactions" role="group" aria-label={commentId ? "React to this comment" : "React to this video"}>
-      <button
-        className="button button-secondary"
+    <div
+      className="flex flex-wrap items-center gap-2"
+      role="group"
+      aria-label={commentId ? "React to this comment" : "React to this video"}
+    >
+      <Button
         type="button"
+        variant="outline"
+        size={commentId ? "sm" : "default"}
+        className={pressed}
         aria-pressed={mine === "LIKE"}
         disabled={!signedIn}
         onClick={() => press("LIKE")}
       >
+        <ThumbsUpIcon aria-hidden="true" />
         Like · {count(likes)}
-      </button>
-      <button
-        className="button button-secondary"
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size={commentId ? "sm" : "default"}
+        className={pressed}
         aria-pressed={mine === "DISLIKE"}
         disabled={!signedIn}
         onClick={() => press("DISLIKE")}
       >
+        <ThumbsDownIcon aria-hidden="true" />
         Dislike{dislikes !== undefined && ` · ${count(dislikes)}`}
-      </button>
+      </Button>
       {!signedIn && (
-        <span className="hint">
-          <Link href="/sign-in">Sign in to react</Link>
+        <span className="text-sm text-muted-foreground">
+          <Link className="text-primary underline underline-offset-4" href="/sign-in">
+            Sign in to react
+          </Link>
         </span>
       )}
-      {message && <span role="alert">{message}</span>}
+      {message && (
+        <span role="alert" className="text-sm text-destructive">
+          {message}
+        </span>
+      )}
     </div>
   );
 }

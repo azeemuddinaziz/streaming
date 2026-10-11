@@ -1,7 +1,13 @@
 "use client";
 
+import { Share2Icon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { buildShareLink, formatTimestamp } from "@/lib/share-link";
 
 type Props = {
@@ -16,12 +22,11 @@ type Props = {
 
 // Share control for a Video or a Channel: a popover with the link to copy and,
 // where the browser has one, the device's share sheet. A link only; nothing is
-// recorded or counted (GLOSSARY, Share link).
+// recorded or counted (GLOSSARY, Share link). Radix closes it on Escape and
+// returns focus to the button.
 export function ShareButton({ withStartTime = false, privateVideo = false, subject, title }: Props) {
-  const popoverId = useId();
-  const trigger = useRef<HTMLButtonElement>(null);
+  const id = useId();
   const field = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [position, setPosition] = useState(0);
   const [useStart, setUseStart] = useState(false);
@@ -33,26 +38,14 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
     setCanShare(typeof navigator.share === "function");
   }, []);
 
-  // Escape closes the popover wherever focus is, and focus goes back to the button.
-  useEffect(() => {
+  // Each opening starts fresh, from the player's position at that moment.
+  function onOpenChange(open: boolean) {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      trigger.current?.focus();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  function toggle() {
-    if (open) return setOpen(false);
     setBase(window.location.origin + window.location.pathname);
     const player = withStartTime ? document.querySelector<HTMLVideoElement>("video.player") : null;
     setPosition(Math.floor(player?.currentTime ?? 0));
     setUseStart(false);
     setStatus(undefined);
-    setOpen(true);
   }
 
   const link = buildShareLink(base, "", withStartTime && useStart ? position : undefined);
@@ -77,59 +70,66 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
   }
 
   return (
-    <div className="share">
-      <button
-        ref={trigger}
-        className="button button-secondary"
-        type="button"
-        aria-expanded={open}
-        aria-controls={popoverId}
-        aria-haspopup="dialog"
-        onClick={toggle}
+    <Popover onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline">
+          <Share2Icon aria-hidden="true" />
+          Share
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        role="dialog"
+        aria-label={`Share this ${subject}`}
+        className="flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3"
       >
-        Share
-      </button>
-      <div id={popoverId} className="share-popover" role="dialog" aria-label={`Share this ${subject}`} hidden={!open}>
         {privateVideo ? (
-          <p>
-            Only you can watch this. <Link href="/studio">Change Visibility to share it</Link>.
+          <p className="text-sm">
+            Only you can watch this.{" "}
+            <Link className="text-primary underline underline-offset-4" href="/studio">
+              Change Visibility to share it
+            </Link>
+            .
           </p>
         ) : (
           <>
-            <label className="share-label" htmlFor={`${popoverId}-link`}>
+            <Label htmlFor={`${id}-link`} className="text-muted-foreground">
               Link
-            </label>
-            <div className="share-row">
-              <input
-                id={`${popoverId}-link`}
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id={`${id}-link`}
                 ref={field}
-                className="share-field"
                 type="text"
                 readOnly
                 value={link}
                 onFocus={(event) => event.currentTarget.select()}
               />
-              <button className="button" type="button" onClick={copy}>
+              <Button type="button" onClick={copy}>
                 Copy
-              </button>
+              </Button>
             </div>
             {withStartTime && (
-              <label className="share-start">
-                <input type="checkbox" checked={useStart} onChange={(event) => setUseStart(event.target.checked)} />
-                Start at {formatTimestamp(position)}
-              </label>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={`${id}-start`}
+                  checked={useStart}
+                  onCheckedChange={(checked) => setUseStart(checked === true)}
+                />
+                <Label htmlFor={`${id}-start`}>Start at {formatTimestamp(position)}</Label>
+              </div>
             )}
             {canShare && (
-              <button className="button button-secondary" type="button" onClick={share}>
+              <Button type="button" variant="outline" onClick={share}>
                 Share…
-              </button>
+              </Button>
             )}
-            <p className="hint" role="status">
+            <p className="min-h-5 text-sm text-muted-foreground" role="status">
               {status}
             </p>
           </>
         )}
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
