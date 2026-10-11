@@ -22,3 +22,8 @@ If you are interested in the legacy code or the architectural starting point of 
 * [v1.0.0 Release Notes](https://github.com/azeemuddinaziz/streaming/releases/tag/v1.00)
 * [Legacy Frontend Repo](https://github.com/azeemuddinaziz/streaming_frontend)
 * [Legacy Backend Repo](https://github.com/azeemuddinaziz/streaming_backend)
+
+---
+
+## License
+StreamSouk is released under the [MIT License](LICENSE).
