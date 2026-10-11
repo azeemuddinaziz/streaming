@@ -188,7 +188,7 @@ export function EditVideoForm({ videoId, initial }: { videoId: string; initial: 
               id={`${ids}-comments`}
               checked={values.commentsEnabled}
               onCheckedChange={(checked) => change({ commentsEnabled: checked === true })}
-              aria-describedby={`${ids}-comments-hint`}
+              aria-describedby={`${ids}-comments-hint${errors.commentsEnabled ? ` ${ids}-comments-error` : ""}`}
             />
             <Label htmlFor={`${ids}-comments`}>Allow comments</Label>
           </div>

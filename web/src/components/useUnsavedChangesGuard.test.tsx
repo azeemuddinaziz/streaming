@@ -75,4 +75,19 @@ describe("useUnsavedChangesGuard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Keep editing" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
+
+  it("arms Back again after a clean Back used the spare entry up", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    const { rerender } = render(<Page dirty />);
+    expect(pushState).toHaveBeenCalledTimes(1);
+
+    rerender(<Page dirty={false} />);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    rerender(<Page dirty />);
+
+    expect(pushState).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+    pushState.mockRestore();
+  });
 });

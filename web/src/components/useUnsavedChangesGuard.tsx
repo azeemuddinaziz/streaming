@@ -23,12 +23,24 @@ const BACK = Symbol("back");
 // The App Router has no route-change event, so in-app links are caught on
 // click (capture phase) and Back through a spare history entry: Back lands on
 // it, the dialog opens, and Stay puts it back. After a save the spare entry
-// stays, so one extra Back press lands on the same page.
+// stays, so one extra Back press lands on the same page (which uses it up; the
+// next unsaved edit pushes a new one).
 export function useUnsavedChangesGuard(dirty: boolean): { dialog: ReactNode } {
   const router = useRouter();
   const [pending, setPending] = useState<string | typeof BACK | null>(null);
   const bypass = useRef(false);
   const spareEntry = useRef(false);
+  const dirtyNow = useRef(dirty);
+  dirtyNow.current = dirty;
+
+  // A Back while clean uses the spare entry up; the next dirty spell needs a new one.
+  useEffect(() => {
+    const onPopState = () => {
+      if (!dirtyNow.current) spareEntry.current = false;
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     if (!dirty) return;
