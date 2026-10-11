@@ -1,14 +1,24 @@
-import type { Visibility } from "../../generated/prisma/client.ts";
+import type { VideoStatus, Visibility } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 import { countedComments } from "./comments.repository.ts";
 
 export class VideoRepository {
-  static async listForUser(userId: string) {
-    return await prisma.video.findMany({
-      where: { channel: { userId }, deletedAt: null },
-      include: { upload: { select: { filename: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+  // One page of an owner's non-deleted Videos for the studio, newest first
+  // (ties by id), optionally only those in one processing status, with the
+  // total that matches the same filter.
+  static async listForUser(userId: string, status: VideoStatus | undefined, skip: number, take: number) {
+    const where = { channel: { userId }, deletedAt: null, ...(status && { status }) };
+    const [videos, total] = await Promise.all([
+      prisma.video.findMany({
+        where,
+        include: { upload: { select: { filename: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+      }),
+      prisma.video.count({ where }),
+    ]);
+    return { videos, total };
   }
 
   // One page of what anyone may see: ready, public, non-deleted Videos of every

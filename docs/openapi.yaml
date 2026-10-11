@@ -426,11 +426,23 @@ paths:
     get:
       tags: [Studio]
       summary: My videos
-      description: Every non-deleted Video on your Channel, with its processing status.
+      description: |
+        One page of the non-deleted Videos on your Channel, with their processing status, newest
+        first (ties by id), 24 per page. `total` counts every Video matching the filter, so the
+        Studio can show numbered pages; a page past the end is empty.
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          description: Page number from 1. Missing or invalid is 1.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: status
+          in: query
+          description: Only Videos in this processing status. Case-sensitive; any other value, including an empty one or a repeated parameter, is 400.
+          schema: { type: string, enum: [PROCESSING, READY, FAILED] }
       responses:
         "200":
-          description: The list.
+          description: The page.
           content:
             application/json:
               schema:
@@ -439,6 +451,10 @@ paths:
                   videos:
                     type: array
                     items: { $ref: "#/components/schemas/StudioVideo" }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
+                  total: { type: integer, description: "How many Videos match the filter, across all pages." }
+        "400": { description: "`status` is not PROCESSING, READY or FAILED." }
         "401": { $ref: "#/components/responses/Unauthenticated" }
   /videos/{id}:
     parameters:

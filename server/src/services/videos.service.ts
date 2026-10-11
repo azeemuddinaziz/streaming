@@ -14,6 +14,8 @@ import { SubscriptionService } from "./subscriptions.service.ts";
 
 const TITLE_MAX = 100;
 const DESCRIPTION_MAX = 5000;
+const STUDIO_PAGE_SIZE = 24;
+const STATUSES = ["PROCESSING", "READY", "FAILED"] as const;
 const VISIBILITIES = ["PRIVATE", "UNLISTED", "PUBLIC"] as const;
 
 // Reads an optional text field: undefined when absent, null when blank.
@@ -126,11 +128,26 @@ export const VideoService = {
   },
 
   // A Video is labelled with its Upload's filename until it has a title.
-  async listStudio(userId: string) {
-    const videos = await VideoRepository.listForUser(userId);
+  // Paged by number, 24 to a page, with a total; `status` narrows the list.
+  async listStudio(userId: string, pageParam: unknown, statusParam: unknown) {
+    let status: (typeof STATUSES)[number] | undefined;
+    if (statusParam !== undefined) {
+      status = STATUSES.find((candidate) => candidate === statusParam);
+      if (!status) throw new HttpError(400, "The status must be PROCESSING, READY or FAILED.");
+    }
+    const parsed = Number(pageParam);
+    const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+
+    const { videos, total } = await VideoRepository.listForUser(
+      userId,
+      status,
+      (page - 1) * STUDIO_PAGE_SIZE,
+      STUDIO_PAGE_SIZE,
+    );
+    enrich({ statusFilter: status ?? null, videoCount: videos.length });
     const counts = await ReactionRepository.countsFor(videos.map((video) => video.id));
 
-    return await Promise.all(videos.map(async (video) => ({
+    const entries = await Promise.all(videos.map(async (video) => ({
       id: video.id,
       label: video.title ?? video.upload?.filename ?? "Untitled",
       title: video.title,
@@ -142,6 +159,7 @@ export const VideoService = {
       createdAt: video.createdAt,
       thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
     })));
+    return { videos: entries, page, hasMore: page * STUDIO_PAGE_SIZE < total, total };
   },
 
   // Replaces a ready Video's Thumbnail with the owner's image, stored in every

@@ -1,7 +1,8 @@
 import sharp from "sharp";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDiskStorage } from "../lib/storage.ts";
 import { prisma } from "../lib/prisma.ts";
+import { setEmit, type WideEvent } from "../lib/wide-event.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { UploadRepository } from "../repositories/uploads.repository.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
@@ -88,6 +89,9 @@ describe("studio list", () => {
           thumbnailPath: null,
         },
       ],
+      page: 1,
+      hasMore: false,
+      total: 1,
     });
   });
 
@@ -95,10 +99,89 @@ describe("studio list", () => {
     const ada = await person("Ada-Lovelace");
 
     const empty = await api.request("/videos/mine", { headers: ada.bearer });
-    expect(await empty.json()).toEqual({ videos: [] });
+    expect(await empty.json()).toEqual({ videos: [], page: 1, hasMore: false, total: 0 });
 
     const anonymous = await api.request("/videos/mine");
     expect(anonymous.status).toBe(401);
+  });
+
+  async function studioIds(owner: Awaited<ReturnType<typeof person>>, query = "") {
+    const response = await api.request(`/videos/mine${query}`, { headers: owner.bearer });
+    const body = await response.json();
+    return { status: response.status, ...body, ids: (body.videos ?? []).map((v: { id: string }) => v.id) };
+  }
+
+  it("pages newest first, 24 to a page, ties by id, with a total", async () => {
+    const ada = await person("Ada-Lovelace");
+    for (let i = 0; i < 25; i++) await uploaded(ada, `a${i}`, `v${i}.mp4`);
+    await prisma.video.updateMany({ data: { createdAt: new Date("2026-01-01T00:00:00Z") } });
+
+    const first = await studioIds(ada);
+    const second = await studioIds(ada, "?page=2");
+    const past = await studioIds(ada, "?page=3");
+
+    expect(first).toMatchObject({ page: 1, hasMore: true, total: 25 });
+    expect(first.ids).toHaveLength(24);
+    expect(second).toMatchObject({ page: 2, hasMore: false, total: 25 });
+    expect(second.ids).toHaveLength(1);
+    expect(past).toMatchObject({ page: 3, hasMore: false, total: 25, ids: [] });
+
+    const all = [...first.ids, ...second.ids];
+    expect(new Set(all).size).toBe(25);
+    expect(all).toEqual([...all].sort().reverse());
+    expect((await studioIds(ada, "?page=0")).page).toBe(1);
+    expect((await studioIds(ada, "?page=abc")).page).toBe(1);
+    expect(await studioIds(ada, "?page=9007199254740991")).toMatchObject({ status: 200, hasMore: false, ids: [] });
+  });
+
+  it("filters by status with a matching total, and refuses an unknown status", async () => {
+    const ada = await person("Ada-Lovelace");
+    await uploaded(ada, "a1", "one.mp4");
+    await uploaded(ada, "a2", "two.mp4");
+    const failed = await prisma.upload.findUniqueOrThrow({ where: { tusId: "a2" } });
+    await prisma.video.update({ where: { id: failed.videoId! }, data: { status: "FAILED" } });
+
+    const onlyFailed = await studioIds(ada, "?status=FAILED");
+    expect(onlyFailed).toMatchObject({ total: 1, hasMore: false, ids: [failed.videoId] });
+    expect((await studioIds(ada, "?status=PROCESSING")).total).toBe(1);
+    expect((await studioIds(ada, "?status=READY"))).toMatchObject({ total: 0, ids: [] });
+    expect((await studioIds(ada)).total).toBe(2);
+
+    expect((await studioIds(ada, "?status=nope")).status).toBe(400);
+    expect((await studioIds(ada, "?status=ready")).status).toBe(400);
+  });
+
+  it("records the filter and the entries returned on the wide event", async () => {
+    const events: WideEvent[] = [];
+    setEmit((event) => events.push(event));
+    try {
+      const ada = await person("Ada-Lovelace");
+      await uploaded(ada, "a1", "one.mp4");
+      events.length = 0;
+
+      await api.request("/videos/mine?status=PROCESSING", { headers: ada.bearer });
+      await api.request("/videos/mine", { headers: ada.bearer });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(events.map((e) => [e.statusFilter, e.videoCount])).toEqual([
+        ["PROCESSING", 1],
+        [null, 1],
+      ]);
+    } finally {
+      setEmit(null);
+    }
+  });
+
+  it("never lists a deleted Video or counts it", async () => {
+    const ada = await person("Ada-Lovelace");
+    await uploaded(ada, "a1", "one.mp4");
+    await uploaded(ada, "a2", "two.mp4");
+    const gone = await prisma.upload.findUniqueOrThrow({ where: { tusId: "a2" } });
+    await prisma.video.update({ where: { id: gone.videoId! }, data: { deletedAt: new Date() } });
+
+    const result = await studioIds(ada);
+    expect(result.total).toBe(1);
+    expect(result.ids).not.toContain(gone.videoId);
   });
 });
 
