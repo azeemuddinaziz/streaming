@@ -1,0 +1,122 @@
+# Runs the whole stack locally: `docker compose up`, then open
+# http://localhost:3001. Bytes stay on disk (no S3 bucket or cloud account).
+# Not for production: no TLS, no backups, secrets live in a local volume.
+name: streamsouk
+
+x-server-env: &server-env
+  DATABASE_URL: postgresql://streamsouk:streamsouk@postgres:5432/streamsouk
+  WEB_ORIGIN: http://localhost:3001
+  PORT: "3000"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: streamsouk
+      POSTGRES_PASSWORD: streamsouk
+      POSTGRES_DB: streamsouk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamsouk -d streamsouk"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    # JWT_SECRET is generated on first start and kept in the `config` volume.
+    # Migrations run before the API listens.
+    command: ["./node_modules/.bin/tsx", "src/app.ts"]
+    environment:
+      <<: *server-env
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - data:/app/server/data
+      - config:/app/server/config
+    # tusd shares this container's network (below), so its port is published here.
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/api/v1/videos').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    command: ["./node_modules/.bin/tsx", "src/worker.ts"]
+    environment: *server-env
+    volumes:
+      - data:/app/server/data
+      - config:/app/server/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tusd:
+    image: tusproject/tusd:v2
+    # Same network namespace as the API, so the hooks' `localhost:3000` works
+    # and the API reaches tusd at its default `localhost:8080`.
+    network_mode: service:api
+    # Runs as root so it can write to the shared volume on first use.
+    user: root
+    # `$$` is a literal `$`: tusd takes a regular expression, and credentials
+    # need one exact origin.
+    command:
+      - -hooks-http=http://localhost:3000/api/v1/webhooks/tusd
+      - -hooks-http-forward-headers=Authorization,Cookie
+      - -hooks-enabled-events=pre-create,post-create,post-receive,pre-finish,post-finish,post-terminate
+      - -cors-allow-origin=^http://localhost:3001$$
+      - -cors-allow-credentials
+      - -upload-dir=/data/uploads
+    volumes:
+      - data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+        NEXT_PUBLIC_TUS_URL: http://localhost:8080/files/
+        NEXT_PUBLIC_WEB_ORIGIN: http://localhost:3001
+    environment:
+      # Server-side address, inside the compose network.
+      API_URL: http://api:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  data:
+  config:

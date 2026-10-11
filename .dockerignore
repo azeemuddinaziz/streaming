@@ -1,0 +1,15 @@
+# The build context is the repo root (see compose.yaml), so this is the one
+# .dockerignore both images use.
+.git
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/data
+**/generated
+**/.next
+**/*.tsbuildinfo
+**/next-env.d.ts
+docs
+.claude
+.DS_Store
