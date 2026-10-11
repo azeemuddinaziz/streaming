@@ -1182,11 +1182,14 @@ paths:
       tags: [Discovering]
       summary: A channel's page
       description: |
-        The Channel's PUBLIC, READY, non-deleted Videos, newest first, and its public Subscriber
-        count. The name is matched regardless of case. A token is optional: with one, `subscribed`
-        says whether the caller subscribes. Who the Subscribers are is never returned.
+        One page of the Channel's PUBLIC, READY, non-deleted Videos, newest first (ties broken by
+        id), 24 per page, and its public Subscriber count. `hasMore` says another page follows; a
+        missing or invalid `page` is 1 and a page past the end is empty. The name is matched
+        regardless of case. A token is optional: with one, `subscribed` says whether the caller
+        subscribes. Who the Subscribers are is never returned.
       parameters:
         - { name: name, in: path, required: true, schema: { type: string }, example: ada-lovelace }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
       responses:
         "200":
           description: The Channel and its Videos.
@@ -1204,10 +1207,14 @@ paths:
                   videos:
                     type: array
                     items: { $ref: "#/components/schemas/ChannelVideo" }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
               example:
                 channel: { name: ada-lovelace }
                 subscribers: 7
                 subscribed: null
+                page: 1
+                hasMore: false
                 videos:
                   - id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
                     title: Holiday in Lisbon
