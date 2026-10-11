@@ -16,7 +16,7 @@ export function checkAccountName(name: string): string | undefined {
 
 export function checkEmail(email: string): string | undefined {
   if (email.trim() === "") return "Enter your email.";
-  if (!/^\S+@\S+\.\S+$/.test(email.trim())) return "Enter a valid email address.";
+  if (!/^\S+@\S+$/.test(email.trim())) return "Enter a valid email address.";
   return undefined;
 }
 

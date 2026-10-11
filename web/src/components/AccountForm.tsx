@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { signIn, signUp } from "@/lib/api-client";
+import { safeNext } from "@/lib/return-address";
 import { checkAccountName, checkEmail, checkPassword } from "@/lib/account-fields";
 
 type Field = "name" | "email" | "password";
@@ -47,13 +48,12 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
     const email = String(data.get("email"));
     const password = String(data.get("password"));
 
-    const found: Partial<Record<Field, string>> = {
-      ...(isSignUp ? { name: checkAccountName(name) } : {}),
-      email: checkEmail(email),
-      password: checkPassword(password, mode),
-    };
-    setFieldErrors(found);
-    const firstInvalid = (["name", "email", "password"] as const).find((f) => found[f]);
+    const values: Record<Field, string> = { name, email, password };
+    const shown: Field[] = isSignUp ? ["name", "email", "password"] : ["email", "password"];
+    const errors: Partial<Record<Field, string>> = {};
+    for (const field of shown) errors[field] = check(field, values[field]);
+    setFieldErrors(errors);
+    const firstInvalid = shown.find((field) => errors[field]);
     if (firstInvalid) {
       setError(undefined);
       const element = form.elements.namedItem(firstInvalid);
@@ -71,11 +71,11 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
       return;
     }
 
-    router.push(next);
+    router.push(safeNext(next));
     router.refresh();
   }
 
-  const describe = (field: Field, hint?: string) =>
+  const describedBy = (field: Field, hint?: string) =>
     [fieldErrors[field] ? `${field}-error` : undefined, hint].filter(Boolean).join(" ") || undefined;
 
   return (
@@ -103,7 +103,7 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
             required
             maxLength={30}
             aria-invalid={fieldErrors.name ? true : undefined}
-            aria-describedby={describe("name", "name-hint")}
+            aria-describedby={describedBy("name", "name-hint")}
             onBlur={(e) => validate("name", e.currentTarget.value)}
           />
           {fieldErrors.name && (
@@ -112,7 +112,7 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
             </p>
           )}
           <p className="text-sm text-muted-foreground" id="name-hint">
-            3 to 30 letters, digits and hyphens. It names your channel and cannot be changed later.
+            3 to 30 letters, digits and hyphens, not starting or ending with a hyphen. It names your channel and cannot be changed later.
           </p>
         </div>
       )}
@@ -126,7 +126,7 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
           autoComplete={isSignUp ? "email" : "username"}
           required
           aria-invalid={fieldErrors.email ? true : undefined}
-          aria-describedby={describe("email")}
+          aria-describedby={describedBy("email")}
           onBlur={(e) => validate("email", e.currentTarget.value)}
         />
         {fieldErrors.email && (
@@ -147,7 +147,7 @@ export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in";
             required
             maxLength={128}
             aria-invalid={fieldErrors.password ? true : undefined}
-            aria-describedby={describe("password", isSignUp ? "password-hint" : undefined)}
+            aria-describedby={describedBy("password", isSignUp ? "password-hint" : undefined)}
             onBlur={(e) => validate("password", e.currentTarget.value)}
           />
           <Button

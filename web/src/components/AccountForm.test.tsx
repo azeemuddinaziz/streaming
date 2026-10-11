@@ -32,6 +32,22 @@ describe("AccountForm", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  it("never goes to an unsafe return address", async () => {
+    const user = userEvent.setup();
+    render(<AccountForm mode="sign-in" next="//evil.example" />);
+    await user.type(screen.getByLabelText("Email"), "a@b.co");
+    await user.type(screen.getByLabelText("Password"), "secret");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  });
+
+  it("moves focus to the first invalid field on submit", async () => {
+    const user = userEvent.setup();
+    render(<AccountForm mode="sign-in" />);
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(document.activeElement).toBe(screen.getByLabelText("Email"));
+  });
+
   it("goes home when there is no return address", async () => {
     const user = userEvent.setup();
     render(<AccountForm mode="sign-in" />);
