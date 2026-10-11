@@ -1,9 +1,9 @@
-import { LoadingRegion, PageTitleSkeleton, VideoGridSkeleton } from "@/components/skeletons";
+import { ChannelHeaderSkeleton, LoadingRegion, VideoGridSkeleton } from "@/components/skeletons";
 
 export default function Loading() {
   return (
     <LoadingRegion label="Loading channel">
-      <PageTitleSkeleton />
+      <ChannelHeaderSkeleton />
       <VideoGridSkeleton count={8} />
     </LoadingRegion>
   );

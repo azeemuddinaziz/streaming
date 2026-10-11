@@ -333,15 +333,6 @@ progress {
   flex-basis: 100%;
 }
 
-.channel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
-  padding: 0;
-  list-style: none;
-}
-
 .subscription-list {
   display: grid;
   gap: 1rem;

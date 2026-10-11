@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { ChannelNotice } from "@/components/ChannelNotice";
+import { ChannelVideos } from "@/components/ChannelVideos";
 import { ShareButton } from "@/components/ShareButton";
 import { SubscribeButton } from "@/components/SubscribeButton";
-import { VideoCard } from "@/components/VideoCard";
+import { Button } from "@/components/ui/button";
 import { getChannelPage, getCurrentUser } from "@/lib/api-client";
 import { channelMetadata } from "@/lib/share-metadata";
 
@@ -22,53 +24,42 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ChannelPage({ params }: Props) {
-  const result = await load((await params).name);
+  const { name } = await params;
+  const result = await load(name);
 
-  if (!result.ok) {
-    return result.reason === "not-found" ? (
-      <section className="channel">
-        <p className="eyebrow">Channel</p>
-        <h1>
-          Channel <em>not found</em>
-        </h1>
-        <p>No one has this account name.</p>
-        <p>
-          <Link href="/">Back to StreamSouk</Link>
-        </p>
-      </section>
-    ) : (
-      <section className="channel">
-        <p role="alert">This channel could not be loaded right now. Try again in a moment.</p>
-      </section>
-    );
-  }
+  if (!result.ok) return <ChannelNotice kind={result.reason} name={name} />;
 
   const user = await getCurrentUser((await cookies()).toString());
   const isOwner = user !== null && user.user.name.toLowerCase() === result.channel.name.toLowerCase();
 
   return (
-    <section className="channel">
-      <p className="eyebrow">Channel</p>
-      <h1>{result.channel.name}</h1>
-      <div className="flex flex-wrap items-center gap-3">
-        <SubscribeButton
-          channelName={result.channel.name}
-          signedIn={user !== null}
-          isOwner={isOwner}
-          subscribers={result.subscribers}
-          subscribed={result.subscribed === true}
-        />
-        <ShareButton subject="channel" title={`${result.channel.name} on StreamSouk`} />
-      </div>
+    <section>
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="break-words font-serif text-4xl sm:text-5xl">{result.channel.name}</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SubscribeButton
+            channelName={result.channel.name}
+            signedIn={user !== null}
+            isOwner={isOwner}
+            subscribers={result.subscribers}
+            subscribed={result.subscribed === true}
+          />
+          <ShareButton subject="channel" title={`${result.channel.name} on StreamSouk`} />
+        </div>
+      </header>
 
       {result.videos.length === 0 ? (
-        <p>No public videos yet.</p>
+        <div className="grid justify-items-start gap-3 rounded-lg border bg-card p-6">
+          <p>No public videos yet.</p>
+          {isOwner && (
+            <Button asChild>
+              <Link href="/upload">Upload a video</Link>
+            </Button>
+          )}
+        </div>
       ) : (
-        <ul className="channel-grid" aria-label={`Videos by ${result.channel.name}`}>
-          {result.videos.map((video) => (
-            <VideoCard key={video.id} video={video} />
-          ))}
-        </ul>
+        // Only the first page is fetched here; ChannelVideos loads the rest in the browser.
+        <ChannelVideos channelName={result.channel.name} videos={result.videos} hasMore={result.hasMore} />
       )}
     </section>
   );
