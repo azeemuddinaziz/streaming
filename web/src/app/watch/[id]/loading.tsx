@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // Mirrors the watch page: player, title, Channel row with actions, description box.
 export default function Loading() {
   return (
-    <LoadingRegion label="Loading video" className="grid gap-4">
+    <LoadingRegion label="Loading video" className="grid gap-4 pb-8">
       <Skeleton className="aspect-video w-full" />
       <Skeleton className="h-7 w-3/4" />
       <div className="flex flex-wrap items-center justify-between gap-3">

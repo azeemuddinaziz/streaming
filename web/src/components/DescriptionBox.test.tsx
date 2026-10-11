@@ -17,7 +17,7 @@ describe("needsCollapse", () => {
 describe("DescriptionBox", () => {
   it("shows views and date, singular for one", () => {
     render(<DescriptionBox views={1} date="Oct 11, 2026" description={null} />);
-    expect(screen.getByText("1 view · Oct 11, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Oct 11, 2026", { exact: false })).toHaveTextContent("1 view · Oct 11, 2026");
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -30,7 +30,7 @@ describe("DescriptionBox", () => {
     toggle.focus();
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("1,200 views · Oct 11, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Oct 11, 2026", { exact: false })).toHaveTextContent("1,200 views · Oct 11, 2026");
   });
 
   it("has no toggle for a short description", () => {

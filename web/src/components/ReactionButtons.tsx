@@ -55,7 +55,7 @@ export function ReactionButtons(props: Props) {
 
   const count = (n: number) => n.toLocaleString("en");
 
-  const pressed = "aria-pressed:border-primary aria-pressed:bg-secondary";
+  const pressed = "aria-pressed:border-primary aria-pressed:bg-secondary aria-pressed:[&_svg]:fill-current";
 
   return (
     <div

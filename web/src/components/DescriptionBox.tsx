@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 // Long enough that two lines would cut it off, by characters or by line breaks.
@@ -21,19 +21,29 @@ export function DescriptionBox({
   description: string | null;
 }) {
   const id = useId();
+  const text = useRef<HTMLParagraphElement>(null);
   const [open, setOpen] = useState(false);
-  const collapsible = description !== null && needsCollapse(description);
+  const [clipped, setClipped] = useState(false);
+  // The character count is a guess at two lines; the measured clip catches what it misses
+  // (a narrow screen wraps sooner).
+  const collapsible = description !== null && (needsCollapse(description) || clipped);
+
+  useEffect(() => {
+    const element = text.current;
+    if (element && !open) setClipped(element.scrollHeight > element.clientHeight + 1);
+  }, [description, open]);
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <p className="font-mono text-sm font-medium">
-        {views.toLocaleString("en")} {views === 1 ? "view" : "views"} · {date}
+      <p className="text-sm font-medium">
+        <span className="font-mono">{views.toLocaleString("en")}</span> {views === 1 ? "view" : "views"} · {date}
       </p>
       {description && (
         <>
           <p
             id={id}
-            className={`mt-2 whitespace-pre-wrap break-words text-sm ${collapsible && !open ? "line-clamp-2" : ""}`}
+            ref={text}
+            className={`mt-2 whitespace-pre-wrap break-words text-sm ${open ? "" : "line-clamp-2"}`}
           >
             {description}
           </p>
