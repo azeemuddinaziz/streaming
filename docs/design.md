@@ -13,7 +13,7 @@ Clean, editorial and calm, so the videos are the loudest thing on the page. Refe
 - Generous whitespace, and a single accent color used sparingly (primary buttons, links, focus, active state)
 - Rounded corners, modest and consistent
 
-The app has no marketing or landing page. The home page is a showcase of public Videos, so the design is a product surface, not a pitch. The serif display type is for page titles and is not meant to carry the interface. The UI/UX revamp (#72) dropped the editorial flourishes (italic emphasis, uppercase mono section labels) the first version of this document called for.
+The web app has no marketing page: its home page is a showcase of public Videos, so the design is a product surface, not a pitch. The one exception is the static `landing/` page (#117), which stands in for a hosted instance. It uses the tokens above as CSS variables, with a plain white page background, and system fonts instead of `next/font`. Light only, like the web app. The serif display type is for page titles and is not meant to carry the interface. The UI/UX revamp (#72) dropped the editorial flourishes (italic emphasis, uppercase mono section labels) the first version of this document called for.
 
 ## Fonts
 

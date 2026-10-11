@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was removed; see README.md). It is a pnpm workspace (root `pnpm-workspace.yaml`, one lockfile) with two apps: `server/`, an Express 5 + TypeScript API backed by Postgres via Prisma 7, and `web/`, a Next.js (App Router) front end. Run `pnpm install` once at the repo root, then run each app's scripts with `pnpm --filter server <script>` or `pnpm --filter web <script>` (or from inside its directory). Visual direction and color tokens are in `docs/design.md`.
+StreamSouk v2 is a video streaming platform being rebuilt as a monorepo (v1 was removed; see README.md). It is a pnpm workspace (root `pnpm-workspace.yaml`, one lockfile) with two apps: `server/`, an Express 5 + TypeScript API backed by Postgres via Prisma 7, and `web/`, a Next.js (App Router) front end, plus `landing/`, a static page (see Landing page). Run `pnpm install` once at the repo root, then run each app's scripts with `pnpm --filter server <script>` or `pnpm --filter web <script>` (or from inside its directory). Visual direction and color tokens are in `docs/design.md`.
 
 ## Commands
 
@@ -35,6 +35,10 @@ Setup: copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET` and `W
 - `pnpm build` / `pnpm start` — production build and server (also on 3001; use `pnpm exec next start -p <port>` if 3001 is taken)
 - `pnpm test`, `pnpm test:watch`, `pnpm exec vitest run src/lib/api-client.test.ts` — Vitest, same as the server
 - `pnpm typecheck` — `tsc` with `noEmit`
+
+### landing (static, no build)
+
+`landing/` is hand-written HTML, CSS and one small JS file (tabs and the click-to-load video); there is no build and no dependency. Vercel's root directory is `landing/` and it needs no environment variables. Open `landing/index.html` or serve the folder (`python3 -m http.server -d landing`) to check it.
 
 ## Architecture
 
@@ -141,6 +145,10 @@ Styling is Tailwind CSS 4 (`@tailwindcss/postcss`) with shadcn/ui on Radix (ADR 
 
 ### App shell
 `RootLayout` renders `AppShell` (`web/src/components/AppShell.tsx`, client) around every page: a top bar (hamburger on md and up, logo, an empty slot kept for a future search field, an Upload button when signed in, `AccountMenu` or Sign in / Sign up), a left `SidebarNav` (Home, Subscriptions, Studio; signed out it is Home and a "Sign in to see your subscriptions" link, never disabled items), and below 768px a `BottomBar` (signed in: Home, Subscriptions, a centred emphasised Upload, Studio; signed out: Home, Sign in) that hides in fullscreen and while the on-screen keyboard is open. Sign out lives only in `AccountMenu`. On `/watch/*` the sidebar is always an overlay (a Radix dialog) opened by the hamburger; elsewhere the hamburger collapses and expands it and the choice is the `sidebar` cookie (`collapsed` | `expanded`), read by the layout so the server render has it and nothing flashes. The destination lists, the active-route rule (`aria-current="page"`, with a bold weight and bar as a second cue), the cookie and the keyboard heuristic are pure code in `web/src/lib/nav.ts`, tested in `nav.test.ts`. Every route has a `loading.tsx` built from `web/src/components/skeletons.tsx`.
+
+## Landing page
+
+`landing/` is the public page that stands in for a hosted instance: demo video, what the app does, engineering decisions with links to proof in the repo, how to run it, and a GitHub Sponsors link. Its colors are the `docs/design.md` tokens (as CSS variables, light only, with a white page background and dark cards and code blocks) and it loads nothing third-party until the demo video is clicked (`youtube-nocookie.com`; the id is `DEMO_VIDEO_ID` in `landing/script.js`). The Docker and manual command blocks are copied from `README.md`: when those commands change, the landing page must change in the same ticket, and the other way round. No analytics, cookie banner, sign-in or API calls.
 
 ## UI/UX
 
