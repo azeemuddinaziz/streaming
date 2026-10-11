@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { cache } from "react";
-import { CommentSection } from "@/components/CommentSection";
+import { CommentSection } from "@/components/comments/CommentSection";
 import { DescriptionBox } from "@/components/DescriptionBox";
 import { ReactionButtons } from "@/components/ReactionButtons";
 import { ShareButton } from "@/components/ShareButton";

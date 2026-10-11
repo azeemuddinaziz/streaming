@@ -68,3 +68,19 @@ export function LoadingRegion({
     </div>
   );
 }
+
+// Mirrors a CommentItem: a name line, the text, and the action row.
+export function CommentListSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <LoadingRegion label="Loading comments" className="grid gap-5">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="grid gap-2" aria-hidden="true">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-full max-w-prose" />
+          <Skeleton className="h-4 w-2/3 max-w-sm" />
+          <Skeleton className="h-8 w-40" />
+        </div>
+      ))}
+    </LoadingRegion>
+  );
+}
