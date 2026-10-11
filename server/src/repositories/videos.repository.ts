@@ -97,6 +97,7 @@ export class VideoRepository {
         where: { id: videoId, status: "PROCESSING" },
         data: {
           status: "READY",
+          processingProgress: 100,
           masterPlaylistKey: result.masterPlaylistKey,
           thumbnailKey: result.thumbnailKey,
         },
@@ -107,6 +108,19 @@ export class VideoRepository {
       await tx.rendition.createMany({
         data: result.renditions.map((rendition) => ({ ...rendition, videoId })),
       });
+    });
+  }
+
+  // Records progress of a Video still processing. It only ever rises, so a
+  // late or repeated write cannot move the bar back.
+  static async setProgress(videoId: string, percent: number) {
+    await prisma.video.updateMany({
+      where: {
+        id: videoId,
+        status: "PROCESSING",
+        OR: [{ processingProgress: null }, { processingProgress: { lt: percent } }],
+      },
+      data: { processingProgress: percent },
     });
   }
 
@@ -161,7 +175,7 @@ export class VideoRepository {
   static async restartProcessing(videoId: string) {
     const claimed = await prisma.video.updateMany({
       where: { id: videoId, status: "FAILED", deletedAt: null },
-      data: { status: "PROCESSING" },
+      data: { status: "PROCESSING", processingProgress: null },
     });
     return claimed.count === 1;
   }

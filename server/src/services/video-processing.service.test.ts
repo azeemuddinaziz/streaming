@@ -63,6 +63,99 @@ const transcode: Transcoder = async (_input, outputDir) => {
   };
 };
 
+// Emits `ticks` evenly spaced percents from 0 to 100 while "transcoding".
+const tickingTranscoder = (ticks: number, seen?: () => Promise<unknown>): Transcoder =>
+  async (input, outputDir, onProgress) => {
+    for (let i = 0; i <= ticks; i++) {
+      onProgress?.((i / ticks) * 100);
+      await seen?.();
+    }
+    return transcode(input, outputDir);
+  };
+
+describe("processing progress", () => {
+  it("rises monotonically, is written throttled, and is 100 once ready", async () => {
+    const video = await newVideo();
+    const writes: (number | null)[] = [];
+    const watcher = async () => {
+      const { processingProgress } = await prisma.video.findUniqueOrThrow({ where: { id: video.id } });
+      if (writes.at(-1) !== processingProgress) writes.push(processingProgress);
+    };
+
+    // A frozen clock, so only the 2-point rule can cause a write.
+    await VideoProcessingService.process(
+      video.id, fakeStorage().storage, tickingTranscoder(1000, watcher), () => 0,
+    );
+
+    const seen = writes.filter((value): value is number => value !== null);
+    expect(seen).toEqual([...seen].sort((a, b) => a - b));
+    // 5 (download) .. 90 (transcoded) .. 99 (uploaded) in steps of at least 2 points.
+    expect(seen.length).toBeGreaterThan(10);
+    expect(seen.length).toBeLessThanOrEqual(52);
+    expect(seen.every((value, i) => i === 0 || value - seen[i - 1] >= 2 || value === 100)).toBe(true);
+    const done = await prisma.video.findUniqueOrThrow({ where: { id: video.id } });
+    expect(done.status).toBe("READY");
+    expect(done.processingProgress).toBe(100);
+  });
+
+  it("also writes a smaller step once two seconds have passed", async () => {
+    const video = await newVideo();
+    let clock = 0;
+    const slow: Transcoder = async (input, outputDir, onProgress) => {
+      onProgress?.(10);
+      clock += 2500;
+      onProgress?.(11);
+      return transcode(input, outputDir);
+    };
+    let midway: number | null = null;
+    const storage = fakeStorage().storage;
+    const put = storage.put;
+    storage.put = async (...args) => {
+      midway ??= (await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress;
+      return put(...args);
+    };
+
+    await VideoProcessingService.process(video.id, storage, slow, () => clock);
+
+    // 5 + 11% of 85 = 14.35, floored; the 10% tick alone would be 13.
+    expect(midway).toBe(14);
+  });
+
+  it("keeps the last value on a failed Video and never moves it backwards", async () => {
+    const video = await newVideo();
+    const failing: Transcoder = async (_input, _out, onProgress) => {
+      onProgress?.(50);
+      throw new Error("ffmpeg died");
+    };
+
+    await expect(
+      VideoProcessingService.process(video.id, fakeStorage().storage, failing),
+    ).rejects.toThrow("ffmpeg died");
+    await VideoProcessingService.fail(video.id);
+
+    const failed = await prisma.video.findUniqueOrThrow({ where: { id: video.id } });
+    expect(failed.status).toBe("FAILED");
+    expect(failed.processingProgress).toBe(47);
+  });
+
+  it("stays null throughout when the transcoder reports nothing, then 100 when ready", async () => {
+    const video = await newVideo();
+    const seen: (number | null)[] = [];
+    const storage = fakeStorage().storage;
+    const put = storage.put;
+    storage.put = async (...args) => {
+      seen.push((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress);
+      return put(...args);
+    };
+
+    await VideoProcessingService.process(video.id, storage, transcode);
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((value) => value === null)).toBe(true);
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress).toBe(100);
+  });
+});
+
 describe("processing a video", () => {
   it("stores the Renditions and Thumbnail and marks the Video ready", async () => {
     const video = await newVideo();

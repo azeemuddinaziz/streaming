@@ -40,7 +40,7 @@ info:
 
     | Job | Trigger | What it does | On failure |
     | --- | --- | --- | --- |
-    | `process-video` | Queued by the `post-finish` hook, and again by **Studio, Retry processing** | Downloads the original, encodes 6-second HLS Renditions (1080/720/480/360p, up to the source height) with a `master.m3u8`, makes a first-frame thumbnail, then marks the Video `READY` | Retried 3 times with backoff; after the last attempt the Video is `FAILED` (retry it from the studio) |
+    | `process-video` | Queued by the `post-finish` hook, and again by **Studio, Retry processing** | Downloads the original, encodes 6-second HLS Renditions (1080/720/480/360p, up to the source height) with a `master.m3u8`, makes a first-frame thumbnail, then marks the Video `READY`. Reports `Video.processingProgress` (0 to 100, throttled to about every 2 seconds or 2 points) while it runs | Retried 3 times with backoff; after the last attempt the Video is `FAILED` (retry it from the studio) |
     | `discard-stale-uploads` | Hourly (`0 * * * *`, UTC) | Finds Uploads unfinished for over 24 hours, marks them abandoned, asks tusd to delete their bytes. The record stays | The claim is given back and the job fails, so it is retried |
 
 servers:
@@ -118,6 +118,12 @@ components:
         title: { type: string, nullable: true }
         description: { type: string, nullable: true }
         status: { $ref: "#/components/schemas/Status" }
+        processingProgress:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: How far processing has got. Null when unknown (not started, or the source's length could not be read); 100 once READY; a FAILED Video keeps its last value. Reset to null by a retry.
         visibility: { $ref: "#/components/schemas/Visibility" }
         commentsEnabled: { type: boolean, description: "Comments are on for this Video." }
         likes: { type: integer, description: "Likes on the Video." }
@@ -133,6 +139,7 @@ components:
         title: null
         description: null
         status: READY
+        processingProgress: 100
         visibility: PRIVATE
         commentsEnabled: true
         likes: 0
@@ -607,7 +614,7 @@ paths:
     post:
       tags: [Studio]
       summary: Retry processing
-      description: Flips a `FAILED` Video back to `PROCESSING` and queues it again from the kept original.
+      description: Flips a `FAILED` Video back to `PROCESSING` (resetting `processingProgress` to null) and queues it again from the kept original.
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
         "202":

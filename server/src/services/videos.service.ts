@@ -161,6 +161,7 @@ export const VideoService = {
       title: video.title,
       description: video.description,
       status: video.status,
+      processingProgress: video.processingProgress,
       visibility: video.visibility,
       commentsEnabled: video.commentsEnabled,
       ...counts.get(video.id)!,

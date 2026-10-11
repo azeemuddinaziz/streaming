@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { transcode } from "./ffmpeg.ts";
+import { stepProgress, transcode } from "./ffmpeg.ts";
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const dir = mkdtempSync(path.join(tmpdir(), "ffmpeg-test-"));
@@ -26,6 +26,21 @@ function streams(file: string, type: "audio" | "video") {
   return probed.streams.filter((stream: { codec_type: string }) => stream.codec_type === type).length;
 }
 
+describe("stepProgress", () => {
+  it("adds the current step's fraction to the finished ones", () => {
+    expect(stepProgress(0, 4)).toBe(0);
+    expect(stepProgress(1, 4, 0.5)).toBe(37.5);
+    expect(stepProgress(4, 4)).toBe(100);
+  });
+
+  it("never gives NaN or a value outside 0 to 100", () => {
+    expect(stepProgress(0, 0)).toBe(0);
+    expect(stepProgress(1, 2, Number.NaN)).toBe(50);
+    expect(stepProgress(1, 2, 7)).toBe(100);
+    expect(stepProgress(0, 2, -1)).toBe(0);
+  });
+});
+
 describe.skipIf(!hasFfmpeg)("transcode (needs ffmpeg)", () => {
   it("makes several Renditions with audio, a master playlist and a first-frame thumbnail", async () => {
     const out = path.join(dir, "out");
@@ -40,6 +55,17 @@ describe.skipIf(!hasFfmpeg)("transcode (needs ffmpeg)", () => {
     expect(master).toContain("360p/index.m3u8");
     expect(result.files).toContain("thumbnail.jpg");
     expect(streams(path.join(out, "thumbnail.jpg"), "video")).toBe(1);
+  }, 120_000);
+
+  it("reports rising progress from 0 to 100 across Renditions", async () => {
+    const seen: number[] = [];
+    await transcode(sample("progress.mp4", "1280x720"), path.join(dir, "out-progress"), (p) => seen.push(p));
+
+    expect(seen.length).toBeGreaterThan(2);
+    expect(seen.every((p) => Number.isFinite(p) && p >= 0 && p <= 100)).toBe(true);
+    expect(seen).toEqual([...seen].sort((a, b) => a - b));
+    expect(seen[0]).toBe(0);
+    expect(seen.at(-1)).toBe(100);
   }, 120_000);
 
   it("keeps a tiny source at its own size, and handles a file with no audio", async () => {

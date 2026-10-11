@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,6 +7,45 @@ const exec = promisify(execFile);
 // A hung ffmpeg must throw inside the job, so the Video can still be marked failed.
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const run = (command: string, args: string[]) => exec(command, args, { timeout: COMMAND_TIMEOUT_MS });
+
+// Runs ffmpeg with `-progress pipe:1` and reports how far into the output it
+// is, in seconds, each time it says so. Rejects on a non-zero exit or timeout.
+function runFfmpeg(args: string[], onTime?: (seconds: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("ffmpeg", ["-nostats", "-progress", "pipe:1", ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: COMMAND_TIMEOUT_MS,
+    });
+    let stderr = "";
+    let pending = "";
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk).slice(-2000);
+    });
+    child.stdout.on("data", (chunk) => {
+      pending += chunk;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) {
+        // Both keys are microseconds; "N/A" until the first frame is out.
+        const match = /^out_time_(?:us|ms)=(\d+)$/.exec(line.trim());
+        if (match) onTime?.(Number(match[1]) / 1_000_000);
+      }
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg ${signal ? `was stopped by ${signal}` : `exited with ${code}`}: ${stderr.trim()}`));
+    });
+  });
+}
+
+// Progress of a run of equal steps, 0 to 100: `done` steps finished plus
+// `fraction` (0 to 1) of the current one. Never NaN, never outside 0..100.
+export function stepProgress(done: number, total: number, fraction = 0) {
+  if (!(total > 0)) return 0;
+  const part = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  return Math.min(100, Math.max(0, ((done + part) / total) * 100));
+}
 
 export type RenditionFile = {
   width: number;
@@ -24,7 +63,13 @@ export type Transcoded = {
   thumbnail: string;
 };
 
-export type Transcoder = (input: string, outputDir: string) => Promise<Transcoded>;
+// `onProgress` gets the percent done (0 to 100, rising) of the whole transcode.
+// It is never called when the source's duration is unknown.
+export type Transcoder = (
+  input: string,
+  outputDir: string,
+  onProgress?: (percent: number) => void,
+) => Promise<Transcoded>;
 
 // Heights to encode, tallest first, with the video bitrate (kbit/s) of each.
 // Only heights up to the source's are used, so nothing is upscaled.
@@ -36,6 +81,19 @@ const LADDER = [
 ];
 const AUDIO_KBPS = 128;
 const SEGMENT_SECONDS = 6;
+
+// Length of the source in seconds, or null when ffprobe cannot tell.
+async function probeDuration(input: string) {
+  try {
+    const { stdout } = await run("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration", "-of", "json", input,
+    ]);
+    const seconds = Number(JSON.parse(stdout).format?.duration);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  } catch {
+    return null;
+  }
+}
 
 async function probe(input: string) {
   const { stdout } = await run("ffprobe", [
@@ -53,8 +111,9 @@ async function probe(input: string) {
 // Cuts the file into HLS Renditions (video and audio together), a master
 // playlist listing them, and a JPEG of the first frame. Throws when ffmpeg
 // cannot read the file.
-export const transcode: Transcoder = async (input, outputDir) => {
+export const transcode: Transcoder = async (input, outputDir, onProgress) => {
   const source = await probe(input);
+  const duration = await probeDuration(input);
 
   let ladder = LADDER.filter((step) => step.height <= source.height);
   // A source smaller than every step is kept at its own size.
@@ -63,10 +122,20 @@ export const transcode: Transcoder = async (input, outputDir) => {
   const renditions: RenditionFile[] = [];
   const files: string[] = [];
 
-  for (const step of ladder) {
+  // One step per Rendition, plus the thumbnail.
+  const steps = ladder.length + 1;
+  let highest = 0;
+  const report = (done: number, fraction = 0) => {
+    if (duration === null) return;
+    highest = Math.max(highest, stepProgress(done, steps, fraction));
+    onProgress?.(highest);
+  };
+  report(0);
+
+  for (const [index, step] of ladder.entries()) {
     const dir = `${step.height}p`;
     await mkdir(path.join(outputDir, dir), { recursive: true });
-    await run("ffmpeg", [
+    await runFfmpeg([
       "-y", "-i", input,
       // First video stream, and the first audio stream when there is one.
       "-map", "0:v:0", "-map", "0:a:0?",
@@ -80,7 +149,8 @@ export const transcode: Transcoder = async (input, outputDir) => {
       "-f", "hls", "-hls_time", String(SEGMENT_SECONDS), "-hls_playlist_type", "vod",
       "-hls_segment_filename", path.join(outputDir, dir, "segment_%03d.ts"),
       path.join(outputDir, dir, "index.m3u8"),
-    ]);
+    ], (seconds) => report(index, duration ? seconds / duration : 0));
+    report(index + 1);
 
     // Scaling to an even width keeps the aspect ratio, so read the result back.
     const encoded = await probe(path.join(outputDir, dir, "segment_000.ts"));
@@ -94,6 +164,7 @@ export const transcode: Transcoder = async (input, outputDir) => {
 
   const thumbnail = "thumbnail.jpg";
   await run("ffmpeg", ["-y", "-i", input, "-frames:v", "1", "-q:v", "2", path.join(outputDir, thumbnail)]);
+  report(steps);
 
   const masterPlaylist = "master.m3u8";
   await writeFile(
