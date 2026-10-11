@@ -2,6 +2,8 @@ import path from "node:path";
 import { HttpError } from "../errors.ts";
 import { verifyMediaToken } from "../lib/media-token.ts";
 import { createStorage } from "../lib/storage.ts";
+import { enrich } from "../lib/wide-event.ts";
+import { VideoRepository } from "../repositories/videos.repository.ts";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
@@ -38,5 +40,23 @@ export const MediaService = {
     const body = await storage.read(key);
     if (!body) throw new HttpError(404, "Not found.");
     return { redirect: undefined, body, contentType: CONTENT_TYPES[extension] ?? "application/octet-stream" } as const;
+  },
+
+  // The Thumbnail of a Video anyone may know of: ready, not deleted, not
+  // PRIVATE. Everything else, for the owner too, is "not found", which reveals
+  // nothing. Delivered as `resolve` delivers other files.
+  async thumbnail(videoId: string) {
+    enrich({ videoId });
+    const video = await VideoRepository.findForThumbnail(videoId);
+    if (!video?.thumbnailKey || video.status !== "READY" || video.visibility === "PRIVATE") {
+      throw new HttpError(404, "Not found.");
+    }
+
+    const url = await storage.signedUrl(video.thumbnailKey, SIGNED_URL_SECONDS);
+    if (url) return { redirect: url, body: undefined } as const;
+
+    const body = await storage.read(video.thumbnailKey);
+    if (!body) throw new HttpError(404, "Not found.");
+    return { redirect: undefined, body, contentType: CONTENT_TYPES[path.extname(video.thumbnailKey)] ?? "image/jpeg" } as const;
   },
 };

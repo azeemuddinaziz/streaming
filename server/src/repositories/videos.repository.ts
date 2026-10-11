@@ -42,6 +42,14 @@ export class VideoRepository {
     });
   }
 
+  // The Thumbnail's storage key and what decides whether it may be shared.
+  static async findForThumbnail(videoId: string) {
+    return await prisma.video.findFirst({
+      where: { id: videoId, deletedAt: null },
+      select: { thumbnailKey: true, status: true, visibility: true },
+    });
+  }
+
   // What Comments need to know about a Video.
   static async findForComments(videoId: string) {
     return await prisma.video.findFirst({

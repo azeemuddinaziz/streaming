@@ -75,6 +75,7 @@ export const VideoService = {
       title: video.title,
       description: video.description,
       status,
+      visibility: video.visibility,
       channelName: video.channel.user.name,
       createdAt: video.createdAt,
       views: video._count.views,

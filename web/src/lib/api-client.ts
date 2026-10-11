@@ -214,6 +214,7 @@ export type WatchVideo = {
   title: string | null;
   description: string | null;
   status: "PROCESSING" | "READY" | "FAILED";
+  visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
   channelName: string;
   createdAt: string;
   views: number;

@@ -520,6 +520,26 @@ paths:
   /videos/{id}/thumbnail:
     parameters:
       - { $ref: "#/components/parameters/VideoId" }
+    get:
+      tags: [Watching]
+      summary: A Video's Thumbnail, at a stable address
+      description: |
+        Open to anyone, no token. The JPEG that the Video's Thumbnail names (the custom one, else the
+        generated one). Unlike the `/media/{token}/...` addresses, which expire after 6 hours, this one
+        never expires, so a link preview's cached `og:image` keeps working; the web watch page puts it
+        in `og:image`. Answers 302 to a short-lived storage address when the store can sign (S3), else
+        streams the bytes; `Cache-Control: public, max-age=300` either way. A missing, deleted,
+        PRIVATE (the owner included) or not-READY Video is 404.
+      security: [{}]
+      responses:
+        "200":
+          description: The image (disk storage).
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "302":
+          description: Redirect to a signed storage address (S3).
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [Studio]
       summary: Replace the thumbnail
@@ -622,6 +642,7 @@ paths:
                       title: { type: string, nullable: true }
                       description: { type: string, nullable: true }
                       status: { $ref: "#/components/schemas/Status" }
+                      visibility: { $ref: "#/components/schemas/Visibility" }
                       channelName: { type: string }
                       createdAt: { type: string, format: date-time }
                       views: { type: integer }
@@ -640,6 +661,7 @@ paths:
                   title: Holiday in Lisbon
                   description: Three days of tram rides and pastries.
                   status: READY
+                  visibility: PUBLIC
                   channelName: ada-lovelace
                   createdAt: "2026-10-01T09:30:00.000Z"
                   views: 12

@@ -5,6 +5,7 @@ import { cache } from "react";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoCard } from "@/components/VideoCard";
 import { getChannelPage, getCurrentUser } from "@/lib/api-client";
+import { channelMetadata } from "@/lib/share-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ const load = cache(async (name: string) => getChannelPage(name, (await cookies()
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const result = await load((await params).name);
-  if (result.ok) return { title: `${result.channel.name} · StreamSouk` };
+  if (result.ok) return channelMetadata(result.channel.name);
   return { title: result.reason === "not-found" ? "Channel not found · StreamSouk" : "Channel · StreamSouk" };
 }
 

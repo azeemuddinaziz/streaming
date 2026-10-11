@@ -7,6 +7,7 @@ import { ReactionButtons } from "@/components/ReactionButtons";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
+import { watchMetadata } from "@/lib/share-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!result.ok || result.video.status !== "READY") {
     return { title: "Watch · StreamSouk" };
   }
-  const { title, description } = result.video;
-  return {
-    title: `${title ?? "Untitled video"} · StreamSouk`,
-    description: description ?? undefined,
-    openGraph: { title: title ?? undefined, description: description ?? undefined, type: "video.other" },
-  };
+  return watchMetadata(result.video, process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl());
 }
 
 export default async function WatchPage({ params }: Props) {

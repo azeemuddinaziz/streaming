@@ -3,12 +3,14 @@ import { THUMBNAIL_MAX_BYTES } from "../lib/thumbnail.ts";
 import { AuthenticationMiddleware, OptionalAuthenticationMiddleware } from "../middlewares/auth.middleware.ts";
 import { CommentController } from "../controllers/comments.controller.ts";
 import { ReactionController } from "../controllers/reactions.controller.ts";
+import { MediaController } from "../controllers/media.controller.ts";
 import { VideoController } from "../controllers/videos.controller.ts";
 
 const router = Router();
 
 router.get("/mine", AuthenticationMiddleware.verifyToken, VideoController.mine);
 router.get("/:id/watch", OptionalAuthenticationMiddleware.identify, VideoController.watch);
+router.get("/:id/thumbnail", MediaController.thumbnail);
 router.post("/:id/views", OptionalAuthenticationMiddleware.identify, VideoController.view);
 router.get("/:id/comments/hidden", AuthenticationMiddleware.verifyToken, CommentController.hidden);
 router.post("/:id/comments/:commentId/hide", AuthenticationMiddleware.verifyToken, CommentController.hide);
