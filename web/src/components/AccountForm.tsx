@@ -2,31 +2,68 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { signIn, signUp } from "@/lib/api-client";
+import { checkAccountName, checkEmail, checkPassword } from "@/lib/account-fields";
 
-export function AccountForm({ mode }: { mode: "sign-up" | "sign-in" }) {
+type Field = "name" | "email" | "password";
+
+// `next` is already a safe same-origin path (see `safeNext`): where to go once
+// the person is signed in.
+export function AccountForm({ mode, next = "/" }: { mode: "sign-up" | "sign-in"; next?: string }) {
   const router = useRouter();
-  const [error, setError] = useState<string>();
-  const [pending, setPending] = useState(false);
-  const errorRef = useRef<HTMLParagraphElement>(null);
   const isSignUp = mode === "sign-up";
+  const [error, setError] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
+  const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   // Move keyboard focus to a refusal from the server so it is not missed.
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
 
+  function check(field: Field, value: string): string | undefined {
+    if (field === "name") return checkAccountName(value);
+    if (field === "email") return checkEmail(value);
+    return checkPassword(value, mode);
+  }
+
+  function validate(field: Field, value: string) {
+    setFieldErrors((current) => ({ ...current, [field]: check(field, value) }));
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setError(undefined);
-
-    const data = new FormData(event.currentTarget);
+    if (pending) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get("name") ?? "");
     const email = String(data.get("email"));
     const password = String(data.get("password"));
-    const result = isSignUp
-      ? await signUp({ name: String(data.get("name")), email, password })
-      : await signIn({ email, password });
+
+    const found: Partial<Record<Field, string>> = {
+      ...(isSignUp ? { name: checkAccountName(name) } : {}),
+      email: checkEmail(email),
+      password: checkPassword(password, mode),
+    };
+    setFieldErrors(found);
+    const firstInvalid = (["name", "email", "password"] as const).find((f) => found[f]);
+    if (firstInvalid) {
+      setError(undefined);
+      const element = form.elements.namedItem(firstInvalid);
+      if (element instanceof HTMLElement) element.focus();
+      return;
+    }
+
+    setPending(true);
+    setError(undefined);
+    const result = isSignUp ? await signUp({ name, email, password }) : await signIn({ email, password });
 
     if (!result.ok) {
       setError(result.message);
@@ -34,71 +71,112 @@ export function AccountForm({ mode }: { mode: "sign-up" | "sign-in" }) {
       return;
     }
 
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
+  const describe = (field: Field, hint?: string) =>
+    [fieldErrors[field] ? `${field}-error` : undefined, hint].filter(Boolean).join(" ") || undefined;
+
   return (
-    <form className="form" onSubmit={onSubmit} aria-busy={pending}>
+    <form className="grid gap-5" onSubmit={onSubmit} aria-busy={pending} noValidate>
       {error && (
-        <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+        <p
+          role="alert"
+          tabIndex={-1}
+          ref={errorRef}
+          className="rounded-md border border-destructive bg-card p-3 text-sm text-destructive"
+        >
           {error}
         </p>
       )}
 
       {isSignUp && (
-        <div className="field">
-          <label htmlFor="name">Account name</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="name">Account name</Label>
+          <Input
             id="name"
             name="name"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
-            minLength={3}
             maxLength={30}
-            pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*"
-            aria-describedby="name-hint"
+            aria-invalid={fieldErrors.name ? true : undefined}
+            aria-describedby={describe("name", "name-hint")}
+            onBlur={(e) => validate("name", e.currentTarget.value)}
           />
-          <p className="hint" id="name-hint">
-            3 to 30 letters and digits, with single hyphens between them. It
-            names your channel and cannot be changed later.
+          {fieldErrors.name && (
+            <p id="name-error" className="text-sm text-destructive">
+              {fieldErrors.name}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground" id="name-hint">
+            3 to 30 letters, digits and hyphens. It names your channel and cannot be changed later.
           </p>
         </div>
       )}
 
-      <div className="field">
-        <label htmlFor="email">Email</label>
-        <input
+      <div className="grid gap-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
           id="email"
           name="email"
           type="email"
-          autoComplete="email"
+          autoComplete={isSignUp ? "email" : "username"}
           required
+          aria-invalid={fieldErrors.email ? true : undefined}
+          aria-describedby={describe("email")}
+          onBlur={(e) => validate("email", e.currentTarget.value)}
         />
+        {fieldErrors.email && (
+          <p id="email-error" className="text-sm text-destructive">
+            {fieldErrors.email}
+          </p>
+        )}
       </div>
 
-      <div className="field">
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete={isSignUp ? "new-password" : "current-password"}
-          required
-          minLength={isSignUp ? 8 : undefined}
-          maxLength={128}
-          aria-describedby={isSignUp ? "password-hint" : undefined}
-        />
+      <div className="grid gap-2">
+        <Label htmlFor="password">Password</Label>
+        <div className="flex gap-2">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete={isSignUp ? "new-password" : "current-password"}
+            required
+            maxLength={128}
+            aria-invalid={fieldErrors.password ? true : undefined}
+            aria-describedby={describe("password", isSignUp ? "password-hint" : undefined)}
+            onBlur={(e) => validate("password", e.currentTarget.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((shown) => !shown)}
+          >
+            {showPassword ? <EyeOffIcon aria-hidden="true" /> : <EyeIcon aria-hidden="true" />}
+          </Button>
+        </div>
+        {fieldErrors.password && (
+          <p id="password-error" className="text-sm text-destructive">
+            {fieldErrors.password}
+          </p>
+        )}
         {isSignUp && (
-          <p className="hint" id="password-hint">
+          <p className="text-sm text-muted-foreground" id="password-hint">
             At least 8 characters.
           </p>
         )}
       </div>
 
-      <button className="button" type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="w-full">
+        {pending && <Spinner />}
         {pending ? "Please wait…" : isSignUp ? "Create account" : "Sign in"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SignInLink } from "@/components/SignInLink";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -107,9 +107,9 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
         />
       ) : (
         <p className="text-sm text-muted-foreground">
-          <Link className="text-primary underline underline-offset-4" href="/sign-in">
+          <SignInLink>
             Sign in
-          </Link>{" "}
+          </SignInLink>{" "}
           to write a comment.
         </p>
       )}

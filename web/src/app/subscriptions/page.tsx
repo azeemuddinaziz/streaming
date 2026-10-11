@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { signInHref } from "@/lib/return-address";
 import { AlertTriangleIcon } from "lucide-react";
 import { SubscriptionList } from "@/components/SubscriptionList";
 import { SubscriptionsEmpty } from "@/components/SubscriptionsEmpty";
@@ -12,11 +13,11 @@ export const dynamic = "force-dynamic";
 
 export default async function SubscriptionsPage() {
   const cookieStore = await cookies();
-  if (!cookieStore.has("token")) redirect("/sign-in");
+  if (!cookieStore.has("token")) redirect(signInHref("/subscriptions"));
 
   // Only the first page is fetched here; SubscriptionList loads the rest in the browser.
   const result = await getSubscriptions(1, cookieStore.toString());
-  if (!result.ok && result.reason === "signed-out") redirect("/sign-in");
+  if (!result.ok && result.reason === "signed-out") redirect(signInHref("/subscriptions"));
 
   return (
     <section>

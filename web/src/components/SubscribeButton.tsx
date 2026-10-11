@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { SignInLink } from "@/components/SignInLink";
 import { Button } from "@/components/ui/button";
 import { setSubscription } from "@/lib/api-client";
 
@@ -67,9 +67,9 @@ export function SubscribeButton(props: Props) {
       )}
       {!signedIn && (
         <span className="text-sm text-muted-foreground">
-          <Link className="text-primary underline underline-offset-4" href="/sign-in">
+          <SignInLink>
             Sign in to subscribe
-          </Link>
+          </SignInLink>
         </span>
       )}
       {message && (

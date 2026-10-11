@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { signInHref } from "@/lib/return-address";
 import { VideoDetailsForm } from "@/components/VideoDetailsForm";
 import { DeleteVideoButton } from "@/components/DeleteVideoButton";
 import { ThumbnailPicker } from "@/components/ThumbnailPicker";
@@ -25,14 +26,14 @@ const VISIBILITY_LABEL = {
 
 export default async function StudioPage() {
   const cookieStore = await cookies();
-  if (!cookieStore.has("token")) redirect("/sign-in");
+  if (!cookieStore.has("token")) redirect(signInHref("/studio"));
 
   const cookie = cookieStore.toString();
   const [result, unfinished] = await Promise.all([
     getStudioVideos(cookie),
     getUnfinishedUploads(cookie),
   ]);
-  if (!result.ok && result.reason === "signed-out") redirect("/sign-in");
+  if (!result.ok && result.reason === "signed-out") redirect(signInHref("/studio"));
 
   return (
     <section className="studio">
