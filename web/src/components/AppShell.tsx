@@ -30,7 +30,9 @@ export function AppShell({
   const [overlayOpen, setOverlayOpen] = useState(false);
 
   // Following a link from the overlay, or the browser's Back, closes it.
-  useEffect(() => setOverlayOpen(false), [pathname]);
+  useEffect(() => {
+    setOverlayOpen(false);
+  }, [pathname]);
 
   function onHamburger() {
     if (watching) {
@@ -74,7 +76,8 @@ export function AppShell({
           </>
         ) : (
           <>
-            <Button asChild variant="ghost" size="sm">
+            {/* On phones the bottom bar carries Sign in. */}
+            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
               <Link href="/sign-in">Sign in</Link>
             </Button>
             <Button asChild size="sm">

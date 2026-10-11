@@ -12,16 +12,27 @@ function useBarHidden() {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const viewport = window.visualViewport;
+    const viewport = window.visualViewport ?? null;
     const update = () => {
       const fullscreen = document.fullscreenElement !== null;
-      const keyboard = viewport ? isKeyboardOpen(viewport.height, window.innerHeight) : false;
+      // Pinch-zoom shrinks the visual viewport too, so also require a focused field.
+      const field = document.activeElement;
+      const typing =
+        field instanceof HTMLInputElement ||
+        field instanceof HTMLTextAreaElement ||
+        (field instanceof HTMLElement && field.isContentEditable);
+      const keyboard =
+        viewport !== null && typing && isKeyboardOpen(viewport.height, window.innerHeight);
       setHidden(fullscreen || keyboard);
     };
     document.addEventListener("fullscreenchange", update);
+    document.addEventListener("focusin", update);
+    document.addEventListener("focusout", update);
     viewport?.addEventListener("resize", update);
     return () => {
       document.removeEventListener("fullscreenchange", update);
+      document.removeEventListener("focusin", update);
+      document.removeEventListener("focusout", update);
       viewport?.removeEventListener("resize", update);
     };
   }, []);
