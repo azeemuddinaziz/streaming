@@ -14,10 +14,30 @@ The current iteration of StreamSouk is a self-managed monorepo. The primary goal
 * **Frontend Excellence:** Learning SEO and accessibility standards.
 
 ## Run locally
-Two ways, pick one:
+Three ways, pick one:
 
+* **[Run with the guided script](#run-with-the-guided-script)**: one command that checks your machine, explains each step, asks, then starts the Docker stack and opens the browser.
 * **[Run with Docker](#run-with-docker)**: one command, nothing to install but Docker.
 * **[Run it manually](#run-it-manually)**: clone the repo and run the four processes yourself, with full control. This is the source of truth for how the app runs; the other sections and `CLAUDE.md` "Commands" describe the same things.
+
+## Run with the guided script
+A front end for the Docker setup below, for people who want to be walked through it. It needs Docker and `git`, nothing else, and it never installs anything. It is a plain script you clone and can read first.
+
+```sh
+git clone https://github.com/azeemuddinaziz/streaming.git
+cd streaming
+./scripts/start.sh
+```
+
+It checks your OS (macOS or Linux; on Windows use WSL), that Docker, `docker compose` and `curl` exist and the Docker daemon is running, and that ports 3000, 3001 and 8080 are free (naming the process that holds any that are not). It then explains what `docker compose up` will do, asks `[y/N]`, starts the stack, waits for the API and the web app to answer and opens **http://localhost:3001**.
+
+| Flag | Effect |
+| --- | --- |
+| `--yes` | Accept every prompt (for CI) |
+| `--no-open` | Do not open the browser |
+| `--check` | Run the checks only; changes nothing |
+
+A missing Docker, a busy port or a declined prompt each exit with a message and a non-zero code. If starting fails, what the script started is stopped again (volumes are kept). Running it a second time skips the build that is already done and just starts the stack. To stop or reset, see [Run with Docker](#run-with-docker).
 
 ## Run with Docker
 Docker is the only prerequisite (about 4 GB of RAM allocated to it).

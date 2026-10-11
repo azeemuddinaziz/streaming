@@ -27,6 +27,7 @@ Setup: copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET` and `W
 ### Docker (run from the repo root)
 
 - `docker compose up` — the whole stack with disk storage: `postgres`, `api` (runs `prisma migrate deploy` before listening), `worker`, `tusd` (shares the API's network namespace, so its `localhost` hooks work) and `web` on http://localhost:3001. `JWT_SECRET` is generated on first start into the `config` volume (`server/docker-entrypoint.sh`); no `.env` files are read. `server/Dockerfile` is one image for API and worker, `web/Dockerfile` takes `NEXT_PUBLIC_*` as build args (set in `compose.yaml`; changing them needs `--build`). Both build from the repo root.
+- `./scripts/start.sh` — guided front end for the above: checks OS, Docker, curl and ports 3000/3001/8080, explains and asks `[y/N]`, runs `docker compose up -d`, waits for the API and web, opens the browser. Flags `--yes`, `--no-open`, `--check` (checks only, changes nothing). It never installs Docker, stops what it started if startup fails, and `shellcheck` must pass.
 - `docker compose down` keeps the data; `down -v` resets it. Not for production.
 
 ### web (run from `web/`)
