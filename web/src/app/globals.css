@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
 /* Semantic design tokens. Components use these names only, never raw colors.
    Light theme only for now; dark mode becomes a second set of values. */
 :root {
@@ -20,6 +23,65 @@
 
   --radius: 0.75rem;
   --page-width: 72rem;
+
+  /* shadcn/ui variables, mapped onto the tokens above (ADR 0002). */
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-on-accent);
+  --secondary: var(--color-accent-soft);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-bg);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-accent-soft);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--color-on-accent);
+  --border: var(--color-border);
+  --input: var(--color-border-strong);
+  --ring: var(--color-accent);
+}
+
+/* Dark mode is a later release: a `.dark` class would carry a second set of values. */
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind also emits --color-accent, --color-muted and --color-border inside
+   `@layer theme` (as var(--accent) etc.). The unlayered :root values above always
+   win over a layer, so the tokens keep their documented values; do not move the
+   token block into a layer. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-display);
+  --font-mono: var(--font-jetbrains);
 }
 
 *,
@@ -48,9 +110,19 @@ h1,
 h2,
 h3 {
   margin: 0;
+  line-height: 1.1;
+}
+
+/* The display serif is for page titles only (docs/design.md). */
+h1 {
   font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
-  line-height: 1.1;
+}
+
+h2,
+h3 {
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 600;
 }
 
 h1 {
@@ -58,7 +130,7 @@ h1 {
 }
 
 h1 em {
-  font-style: italic;
+  font-style: normal;
 }
 
 a {
@@ -138,10 +210,7 @@ a:hover {
 
 .eyebrow {
   margin: 0 0 1rem;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.875rem;
   color: var(--color-muted);
 }
 

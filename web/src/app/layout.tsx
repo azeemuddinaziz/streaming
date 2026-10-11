@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { WEB_ORIGIN } from "@/lib/share-metadata";
 import "./globals.css";
@@ -7,11 +8,11 @@ import "./globals.css";
 const display = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
-  style: ["normal", "italic"],
   variable: "--font-display",
 });
 const body = Inter({ subsets: ["latin"], variable: "--font-body" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+// Not --font-mono: that name is Tailwind's own theme variable, mapped in globals.css.
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(WEB_ORIGIN),
@@ -35,6 +36,7 @@ export default function RootLayout({
         <main id="main" className="page">
           {children}
         </main>
+        <Toaster />
         <footer className="site-footer">
           <div className="page">
             <span>© StreamSouk</span>
