@@ -1,8 +1,8 @@
 "use client";
 
 import { ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
+import { SignInLink } from "@/components/SignInLink";
 import { Button } from "@/components/ui/button";
 import { reactToComment, reactToVideo, type ReactionKind } from "@/lib/api-client";
 
@@ -89,9 +89,9 @@ export function ReactionButtons(props: Props) {
       </Button>
       {!signedIn && (
         <span className="text-sm text-muted-foreground">
-          <Link className="text-primary underline underline-offset-4" href="/sign-in">
+          <SignInLink>
             Sign in to react
-          </Link>
+          </SignInLink>
         </span>
       )}
       {message && (

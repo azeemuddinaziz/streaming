@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { signInHref } from "@/lib/return-address";
 import { UploadForm } from "@/components/UploadForm";
 import { getCurrentUser } from "@/lib/api-client";
 
@@ -12,7 +13,7 @@ export default async function UploadPage() {
   const account = cookieStore.has("token")
     ? await getCurrentUser(cookieStore.toString())
     : null;
-  if (!account) redirect("/sign-in");
+  if (!account) redirect(signInHref("/upload"));
 
   return (
     <section className="form-page">

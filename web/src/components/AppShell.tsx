@@ -10,6 +10,7 @@ import { BottomBar } from "@/components/BottomBar";
 import { SidebarNav } from "@/components/SidebarNav";
 import { Button } from "@/components/ui/button";
 import { isWatchPath, sidebarCookie } from "@/lib/nav";
+import { signInHref, signUpHref } from "@/lib/return-address";
 
 // Top bar, sidebar and bottom bar around the page. The collapsed state comes from
 // a cookie, so the server render already has it and nothing flashes. On the watch
@@ -78,10 +79,10 @@ export function AppShell({
           <>
             {/* On phones the bottom bar carries Sign in. */}
             <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-              <Link href="/sign-in">Sign in</Link>
+              <Link href={signInHref(pathname ?? "/")}>Sign in</Link>
             </Button>
             <Button asChild size="sm">
-              <Link href="/sign-up">Sign up</Link>
+              <Link href={signUpHref(pathname ?? "/")}>Sign up</Link>
             </Button>
           </>
         )}

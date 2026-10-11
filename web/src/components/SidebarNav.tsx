@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { NavIcon } from "@/components/NavIcon";
 import { cn } from "@/lib/utils";
 import { isActive, sidebarItems } from "@/lib/nav";
+import { signInHref } from "@/lib/return-address";
 
 // The destinations, in the in-flow sidebar and in the overlay. The active one
 // carries aria-current and is also bold with a bar, so colour is not the only cue.
@@ -39,7 +40,7 @@ export function SidebarNav({
       })}
       {!signedIn && (
         <Link
-          href="/sign-in"
+          href={signInHref("/subscriptions")}
           onClick={onNavigate}
           className="mt-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
         >
