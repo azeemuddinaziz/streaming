@@ -1,5 +1,6 @@
 {
   "name": "streamsouk",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@12.4.2"
 }
