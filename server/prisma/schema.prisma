@@ -49,30 +49,33 @@ enum Visibility {
 
 // A piece of content on a Channel, created only from a completed Upload.
 model Video {
-  id                String      @id @default(uuid())
-  channelId         String
-  channel           Channel     @relation(fields: [channelId], references: [id])
-  status            VideoStatus @default(PROCESSING)
-  visibility        Visibility  @default(PRIVATE)
+  id                 String      @id @default(uuid())
+  channelId          String
+  channel            Channel     @relation(fields: [channelId], references: [id])
+  status             VideoStatus @default(PROCESSING)
+  visibility         Visibility  @default(PRIVATE)
   // Set by the owner. Until then the Upload's filename is only a placeholder label.
-  title             String?
-  description       String?
+  title              String?
+  description        String?
   // Set by the owner. While false, new Comments and edits are refused and only
   // the owner sees the existing ones; nothing is lost (GLOSSARY, Comments off).
-  commentsEnabled   Boolean     @default(true)
-  createdAt         DateTime    @default(now())
+  commentsEnabled    Boolean     @default(true)
+  createdAt          DateTime    @default(now())
   // Set when the owner deletes the Video. Nothing is removed; every read path
   // must leave out a Video that has it (see ADR 0001).
-  deletedAt         DateTime?
+  deletedAt          DateTime?
+  // How far processing has got, 0 to 100; null until it is known. Written
+  // throttled while processing, reset on retry, 100 once ready.
+  processingProgress Int?
   // The Upload this Video was made from, kept as a record of it.
-  upload            Upload?
+  upload             Upload?
   // Storage keys of what processing produced; null until the Video is ready.
-  masterPlaylistKey String?
-  thumbnailKey      String?
-  renditions        Rendition[]
-  views             View[]
-  comments          Comment[]
-  reactions         Reaction[]
+  masterPlaylistKey  String?
+  thumbnailKey       String?
+  renditions         Rendition[]
+  views              View[]
+  comments           Comment[]
+  reactions          Reaction[]
 
   @@index([channelId])
 }

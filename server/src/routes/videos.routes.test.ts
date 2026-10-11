@@ -81,6 +81,7 @@ describe("studio list", () => {
           title: null,
           description: null,
           status: "PROCESSING",
+          processingProgress: null,
           visibility: "PRIVATE",
           commentsEnabled: true,
           likes: 0,
@@ -93,6 +94,19 @@ describe("studio list", () => {
       hasMore: false,
       total: 1,
     });
+  });
+
+  it("carries the processing progress, and the watch response does not", async () => {
+    const ada = await person("Ada-Lovelace");
+    await uploaded(ada, "a1", "holiday.mp4");
+    const { id } = await prisma.video.findFirstOrThrow();
+    await prisma.video.update({ where: { id }, data: { processingProgress: 42 } });
+
+    const list = await (await api.request("/videos/mine", { headers: ada.bearer })).json();
+    const watch = await (await api.request(`/videos/${id}/watch`, { headers: ada.bearer })).json();
+
+    expect(list.videos[0].processingProgress).toBe(42);
+    expect(watch).not.toHaveProperty("processingProgress");
   });
 
   it("is empty before anything is uploaded, and refused to anyone not signed in", async () => {
@@ -206,6 +220,16 @@ describe("retrying failed processing", () => {
     expect(response.status).toBe(202);
     expect(await statusOf(id)).toBe("PROCESSING");
     expect(queueVideoProcessing).toHaveBeenCalledWith(id);
+  });
+
+  it("resets the progress a failed Video kept", async () => {
+    const ada = await person("Ada-Lovelace");
+    const id = await failedVideo(ada);
+    await prisma.video.update({ where: { id }, data: { processingProgress: 63 } });
+
+    await api.request(`/videos/${id}/retry`, { method: "POST", headers: ada.bearer });
+
+    expect((await prisma.video.findUniqueOrThrow({ where: { id } })).processingProgress).toBeNull();
   });
 
   it("refuses a Video that is not failed, and queues nothing", async () => {
