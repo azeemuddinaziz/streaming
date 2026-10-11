@@ -50,6 +50,10 @@ The accent is a burnt terracotta, a nod to a market stall (the "souk" in the nam
 
 Contrast, measured against WCAG: ink 16.5:1 on the page, muted 6.5:1, white on accent 5.2:1, accent text on the page 4.9:1, the status colors 4.7:1 or better, and the strong border 3.4:1 (the 3:1 needed for form controls). The plain `--color-border` is decorative only and never the sole cue for a control.
 
+### shadcn variables
+
+shadcn/ui components read their own variable names, mapped once in `web/src/app/globals.css` onto the tokens above: `--background` → bg, `--foreground` → ink, `--card` and `--popover` → surface, `--primary` → accent, `--primary-foreground` → on-accent, `--secondary` and `--accent` (shadcn's hover tint, not our brand accent) → accent-soft, `--muted` → bg, `--muted-foreground` → muted, `--destructive` → danger, `--border` → border, `--input` → border-strong, `--ring` → accent. New code uses either set of names, never a raw color or a Tailwind palette color (`bg-blue-500`). Edit the token values, not the mapping.
+
 ## Layout and navigation
 
 - Desktop: a top bar (logo, a prominent Upload button when signed in, an avatar menu holding the account name and Sign out) and a left sidebar (Home, Subscriptions, Studio). On the watch page the sidebar is an overlay opened by a hamburger so the player gets the width. The collapsed state is kept in a cookie.
@@ -63,7 +67,7 @@ Contrast, measured against WCAG: ink 16.5:1 on the page, muted 6.5:1, white on a
 - **Loading:** skeletons that mirror the final layout; a spinner only inside a button that was pressed. Thumbnails sit in a 16:9 frame with a neutral placeholder.
 - **Feedback:** `AlertDialog` for destructive confirmations (never `window.confirm`), a toast for a success, inline text for field errors and for rate limits (`Retry-After`), which stay next to the content.
 - **Forms:** labels always visible, validation shown as the person types where a rule is knowable, inline errors tied to fields, unsaved-changes protection on long forms.
-- **Components:** shadcn/ui on Radix (ADR 0002), mapped onto the tokens above.
+- **Components:** shadcn/ui on Radix (ADR 0002), mapped onto the tokens above, in `web/src/components/ui`: Button, Input, Textarea, Label, Checkbox, Dialog, AlertDialog, Popover, DropdownMenu, Tabs, Skeleton, Badge, Spinner, and the Sonner toaster (mounted once in the root layout; call `toast()` from `sonner`).
 
 ## Rules
 
