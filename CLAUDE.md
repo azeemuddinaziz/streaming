@@ -24,6 +24,11 @@ Tests live beside the code as `*.test.ts` and exercise the API over real HTTP: `
 
 Setup: copy `.env.example` to `.env` and set `DATABASE_URL`, `JWT_SECRET` and `WEB_ORIGIN`. Tests also need `TEST_DATABASE_URL`, a separate Postgres database that the suite wipes; `vitest.config.ts` refuses to run if it is missing or equals `DATABASE_URL`. Apply migrations to it with `DATABASE_URL=<test url> pnpm exec prisma migrate deploy`. Tests in `src/routes/` run the API over real HTTP against that database (`src/test/helpers.ts`).
 
+### Docker (run from the repo root)
+
+- `docker compose up` — the whole stack with disk storage: `postgres`, `api` (runs `prisma migrate deploy` before listening), `worker`, `tusd` (shares the API's network namespace, so its `localhost` hooks work) and `web` on http://localhost:3001. `JWT_SECRET` is generated on first start into the `config` volume (`server/docker-entrypoint.sh`); no `.env` files are read. `server/Dockerfile` is one image for API and worker, `web/Dockerfile` takes `NEXT_PUBLIC_*` as build args (set in `compose.yaml`; changing them needs `--build`). Both build from the repo root.
+- `docker compose down` keeps the data; `down -v` resets it. Not for production.
+
 ### web (run from `web/`)
 
 - `pnpm dev` — Next.js dev server on port 3001 (the API is expected at `API_URL`, default `http://localhost:3000`; copy `web/.env.example` to `web/.env.local` to change it)
