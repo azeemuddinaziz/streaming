@@ -20,6 +20,10 @@ _Avoid_: Profile, creator
 A piece of content published on a Channel, created only from a completed Upload. It is processing, ready or failed, and is playable only when ready. Until then anyone opening it is told it is still processing, and a failed one can be processed again from its original Upload. It stays private until its owner has given it both a title and a description, and until then it carries the original filename as a placeholder label.
 _Avoid_: Media, asset
 
+**Studio**:
+The signed-in User's own area for managing their Channel: their Videos with each one's processing state, their unfinished Uploads, and the controls to edit, replace the Thumbnail of, retry or delete a Video. Everything in it concerns only the person's own Channel, so it is where the owner sees what other Viewers cannot, such as Dislikes and hidden Comments.
+_Avoid_: Dashboard, creator hub, admin
+
 **Deleted Video**:
 A Video its owner has deleted. To everyone, the owner included, it is gone for good and its link shows "not found". Nothing is ever removed from the system's own records.
 _Avoid_: Archived, removed, trashed

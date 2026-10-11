@@ -7,13 +7,13 @@ Visual direction for the StreamSouk web app. Light theme only for v2.0.0; dark m
 Clean, editorial and calm, so the videos are the loudest thing on the page. Reference sites: Vidyet and AutoSend.
 
 - A warm off-white page with plain white cards, separated by hairline borders and not by shadows
-- A serif display face for headlines, with one italic word or phrase for emphasis ("Public videos, *worth watching*")
+- A serif display face for page titles only. Section headings and all interface text are sans
 - A neutral sans for body and interface text
-- Small monospace uppercase labels above sections ("PUBLIC VIDEOS", "001")
+- Monospace only for numbers that benefit from alignment (counts, durations, timecodes), never for decorative labels
 - Generous whitespace, and a single accent color used sparingly (primary buttons, links, focus, active state)
 - Rounded corners, modest and consistent
 
-The app has no marketing or landing page. The home page is a showcase of public Videos, so the design is a product surface, not a pitch. The serif display type is for page titles and section headings and is not meant to carry the interface.
+The app has no marketing or landing page. The home page is a showcase of public Videos, so the design is a product surface, not a pitch. The serif display type is for page titles and is not meant to carry the interface. The UI/UX revamp (#72) dropped the editorial flourishes (italic emphasis, uppercase mono section labels) the first version of this document called for.
 
 ## Fonts
 
@@ -21,9 +21,9 @@ All from Google Fonts, loaded with Next.js `next/font`.
 
 | Role | Font |
 |---|---|
-| Display (headlines) | Instrument Serif, with its italic |
+| Display (page titles only) | Instrument Serif |
 | Body and UI | Inter |
-| Labels and numbers | JetBrains Mono |
+| Numbers and timecodes | JetBrains Mono |
 
 ## Color tokens
 
@@ -49,6 +49,21 @@ Components use only these semantic tokens and never a raw hex value. The brand c
 The accent is a burnt terracotta, a nod to a market stall (the "souk" in the name), and unlike the amber and indigo used by the reference sites.
 
 Contrast, measured against WCAG: ink 16.5:1 on the page, muted 6.5:1, white on accent 5.2:1, accent text on the page 4.9:1, the status colors 4.7:1 or better, and the strong border 3.4:1 (the 3:1 needed for form controls). The plain `--color-border` is decorative only and never the sole cue for a control.
+
+## Layout and navigation
+
+- Desktop: a top bar (logo, a prominent Upload button when signed in, an avatar menu holding the account name and Sign out) and a left sidebar (Home, Subscriptions, Studio). On the watch page the sidebar is an overlay opened by a hamburger so the player gets the width. The collapsed state is kept in a cookie.
+- Phones (below about 768px): a top bar with the logo and the avatar menu, and a bottom bar (signed in: Home, Subscriptions, a centred Upload, Studio; signed out: Home, Sign in) that hides in fullscreen and while the keyboard is open.
+- Signed out, Studio and Subscriptions are hidden, not disabled. The active destination carries `aria-current="page"`.
+- The top bar keeps room for a future search field.
+
+## Patterns
+
+- **Lists:** Home, Subscriptions and the Channel page use infinite scroll: the first page is server-rendered, a visible "Load more" button stays available, a live region announces each batch, and Back restores the position. The Studio uses numbered pages. Comments use "Load more".
+- **Loading:** skeletons that mirror the final layout; a spinner only inside a button that was pressed. Thumbnails sit in a 16:9 frame with a neutral placeholder.
+- **Feedback:** `AlertDialog` for destructive confirmations (never `window.confirm`), a toast for a success, inline text for field errors and for rate limits (`Retry-After`), which stay next to the content.
+- **Forms:** labels always visible, validation shown as the person types where a rule is knowable, inline errors tied to fields, unsaved-changes protection on long forms.
+- **Components:** shadcn/ui on Radix (ADR 0002), mapped onto the tokens above.
 
 ## Rules
 

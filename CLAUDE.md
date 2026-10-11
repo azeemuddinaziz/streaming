@@ -117,7 +117,7 @@ Server components call the API through `src/lib/api-client.ts` and forward the b
 
 ## UI/UX
 
-UI/UX is not the focus of v2 yet, so first versions of screens are plain. Whenever you touch a screen, improve its UX where it is cheap and in scope (clear labels, inline validation, loading and empty states, confirmation after actions, accessible controls), following `docs/design.md`. Anything bigger goes in the "UX Improvements" section of ticket #1 rather than being skipped or silently expanded.
+The web UI is being revamped under ticket #72 (a parent with child tickets, in dependency order). The decisions are recorded there and in `docs/design.md`; the adoption of Tailwind and shadcn/ui is ADR 0002. Until a screen's ticket lands, its first version stays plain, and the screens are migrated one ticket at a time, each deleting the `globals.css` rules it replaces. Whenever you touch a screen, follow `docs/design.md` (loading skeletons, empty and error states, `AlertDialog` instead of `window.confirm`, toasts, inline field errors, 360px and keyboard-only). Anything bigger than the ticket at hand goes in a comment on #72 rather than being skipped or silently expanded.
 
 ## Git workflow
 
