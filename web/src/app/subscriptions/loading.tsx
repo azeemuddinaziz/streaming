@@ -1,10 +1,10 @@
-import { LoadingRegion, PageTitleSkeleton, RowListSkeleton } from "@/components/skeletons";
+import { LoadingRegion, PageTitleSkeleton, SubscriptionRowsSkeleton } from "@/components/skeletons";
 
 export default function Loading() {
   return (
     <LoadingRegion label="Loading subscriptions">
       <PageTitleSkeleton />
-      <RowListSkeleton count={6} />
+      <SubscriptionRowsSkeleton count={6} />
     </LoadingRegion>
   );
 }
