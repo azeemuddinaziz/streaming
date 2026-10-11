@@ -57,7 +57,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Searc
             </div>
           ) : (
             <>
-              <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+              <p className="mt-4 text-sm text-muted-foreground">
                 {result.total.toLocaleString("en")} {result.total === 1 ? "video" : "videos"}
               </p>
               <ul className="mt-4 grid gap-3">

@@ -1,5 +1,3 @@
-"use client";
-
 import { PencilIcon } from "lucide-react";
 import { ThumbnailPicker } from "@/components/ThumbnailPicker";
 import { VideoDetailsForm } from "@/components/VideoDetailsForm";
