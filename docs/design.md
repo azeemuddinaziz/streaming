@@ -48,7 +48,7 @@ Components use only these semantic tokens and never a raw hex value. The brand c
 
 The accent is a burnt terracotta, a nod to a market stall (the "souk" in the name), and unlike the amber and indigo used by the reference sites.
 
-Contrast, measured against WCAG: ink 16.5:1 on the page, muted 6.5:1, white on accent 5.2:1, accent text on the page 4.9:1, the status colors 4.7:1 or better, and the strong border 3.4:1 (the 3:1 needed for form controls). The plain `--color-border` is decorative only and never the sole cue for a control.
+Contrast, measured against WCAG (re-checked in #88): ink 16.5:1 on the page, muted 6.5:1, white on accent 5.2:1, accent text on the page 4.9:1, the status colors 4.7:1 or better, and the strong border 3.4:1 (the 3:1 needed for form controls). Status colors on `--color-accent-soft` are 4.3:1, below the 4.5:1 for text, so status text is only ever placed on the page or on a card; the soft tint carries ink text (15:1). The plain `--color-border` is decorative only and never the sole cue for a control.
 
 ### shadcn variables
 
@@ -73,4 +73,6 @@ shadcn/ui components read their own variable names, mapped once in `web/src/app/
 
 - Never use color alone to convey a Video's state (processing, ready, failed). Pair it with a label or an icon.
 - Focus rings are always visible, in the accent color.
+- `globals.css` holds only tokens, the shadcn mapping, resets, base typography, the focus ring and the `prefers-reduced-motion` reset (animations and transitions are cut to nothing). Component styling is Tailwind utilities, never a class rule there.
+- The skip link is the first focusable element; `main` has `id="main"`.
 - Declare `color-scheme: light` for now. Do not hard-code light-only assumptions into components.

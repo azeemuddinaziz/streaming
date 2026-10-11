@@ -40,11 +40,11 @@ export default async function RootLayout({
       className={`${display.variable} ${body.variable} ${mono.variable}`}
     >
       <body>
-        <a className="skip-link" href="#main">
+        <a className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:border focus:border-input focus:bg-card focus:px-4 focus:py-2 focus:text-foreground" href="#main">
           Skip to content
         </a>
         <AppShell accountName={account?.user.name ?? null} initialCollapsed={collapsed}>
-          <main id="main" className="page flex-1">
+          <main id="main" className="mx-auto w-full max-w-(--page-width) flex-1 p-4">
             {children}
           </main>
           <SiteFooter />
