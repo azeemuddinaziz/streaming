@@ -4,7 +4,7 @@ The web app's UI is rebuilt on Tailwind CSS and shadcn/ui, using Radix primitive
 
 ## Consequences
 
-- Tailwind and `globals.css` coexist while screens migrate one ticket at a time (#72); each ticket deletes the rules it replaces, and the cleanup ticket removes what is left.
+- Screens were migrated one ticket at a time (#72), each deleting the rules it replaced; the cleanup (#88) left `globals.css` with only tokens, the shadcn mapping, resets and base typography.
 - Components must use semantic tokens only, never raw colors or Tailwind palette colors, so a later dark mode is a second set of values for the same names.
 - shadcn components live in `web/src/components/ui` and are ours to edit; upgrading them is a manual diff, not a version bump.
 - Reversing this means rewriting every component, which is why it is recorded.
