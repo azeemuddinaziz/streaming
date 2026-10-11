@@ -111,6 +111,22 @@ export class CommentRepository {
     });
   }
 
+  // A Comment of the Video in any state, with its parent's, to tell a Comment
+  // that is not found from one that refuses Reactions. The one read that does
+  // not filter by viewer; the service decides what it may reveal.
+  static async findForReaction(videoId: string, commentId: string) {
+    return await prisma.comment.findFirst({
+      where: { id: commentId, videoId },
+      select: {
+        id: true,
+        parentId: true,
+        deletedAt: true,
+        hiddenAt: true,
+        parent: { select: { deletedAt: true, hiddenAt: true } },
+      },
+    });
+  }
+
   static async findWithAuthor(commentId: string, viewerId: string) {
     return await prisma.comment.findUnique({ where: { id: commentId }, include: withAuthor(viewerId) });
   }

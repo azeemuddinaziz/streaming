@@ -14,6 +14,7 @@ import {
   setCommentHidden,
   type Comment,
 } from "@/lib/api-client";
+import { ReactionButtons } from "./ReactionButtons";
 
 type Props = {
   videoId: string;
@@ -29,6 +30,7 @@ type Props = {
 // gets Edit and Delete here, with inline validation and a saved state.
 function CommentView({
   videoId,
+  signedIn,
   comment,
   onChanged,
   onDeleted,
@@ -37,6 +39,7 @@ function CommentView({
   children,
 }: {
   videoId: string;
+  signedIn: boolean;
   comment: Comment;
   onChanged: (comment: Comment) => void;
   onDeleted: () => void;
@@ -142,6 +145,17 @@ function CommentView({
         </form>
       ) : (
         <p className="comment-body">{comment.body}</p>
+      )}
+      {/* Reactions stop with Comments off and on a hidden Comment, which refuses them. */}
+      {canEdit && !comment.hidden && !editing && (
+        <ReactionButtons
+          videoId={videoId}
+          commentId={comment.id}
+          signedIn={signedIn}
+          likes={comment.likes}
+          dislikes={comment.dislikes}
+          myReaction={comment.myReaction}
+        />
       )}
       {(comment.isAuthor || canHide) && !editing && (
         <div className="comment-actions">
@@ -249,6 +263,7 @@ function CommentForm({
 
 function Replies({
   videoId,
+  signedIn,
   comment,
   canWrite,
   canEdit,
@@ -258,6 +273,7 @@ function Replies({
   onReplyHidden,
 }: {
   videoId: string;
+  signedIn: boolean;
   comment: Comment;
   // Signed in, with Comments on: the Reply buttons show.
   canWrite: boolean;
@@ -322,6 +338,7 @@ function Replies({
             <CommentView
               key={reply.id}
               videoId={videoId}
+              signedIn={signedIn}
               comment={reply}
               onChanged={(changed) =>
                 setReplies((current) => current?.map((item) => (item.id === changed.id ? changed : item)))
@@ -498,6 +515,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
             <CommentView
               key={comment.id}
               videoId={videoId}
+              signedIn={signedIn}
               comment={comment}
               canEdit={commentsEnabled}
               onChanged={(changed) =>
@@ -558,6 +576,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
           <CommentView
             key={comment.id}
             videoId={videoId}
+            signedIn={signedIn}
             comment={comment}
             onChanged={(changed) =>
               setComments((current) =>
@@ -578,6 +597,7 @@ export function CommentSection({ videoId, initialCount, signedIn, isOwner, comme
           >
             <Replies
               videoId={videoId}
+              signedIn={signedIn}
               comment={comment}
               canWrite={canWrite}
               canEdit={commentsEnabled}

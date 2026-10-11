@@ -22,6 +22,16 @@ router.get(
 router.post("/:id/comments", AuthenticationMiddleware.verifyToken, CommentController.create);
 router.patch("/:id/comments/:commentId", AuthenticationMiddleware.verifyToken, CommentController.edit);
 router.delete("/:id/comments/:commentId", AuthenticationMiddleware.verifyToken, CommentController.remove);
+router.put(
+  "/:id/comments/:commentId/reaction",
+  AuthenticationMiddleware.verifyToken,
+  ReactionController.setOnComment,
+);
+router.delete(
+  "/:id/comments/:commentId/reaction",
+  AuthenticationMiddleware.verifyToken,
+  ReactionController.removeFromComment,
+);
 router.put("/:id/reaction", AuthenticationMiddleware.verifyToken, ReactionController.set);
 router.delete("/:id/reaction", AuthenticationMiddleware.verifyToken, ReactionController.remove);
 router.patch("/:id", AuthenticationMiddleware.verifyToken, VideoController.update);

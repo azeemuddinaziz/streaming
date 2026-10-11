@@ -280,15 +280,14 @@ export async function deleteVideo(
 
 export type ReactionState = { likes: number; dislikes?: number; myReaction: ReactionKind | null };
 
-// Sets (`kind`) or removes (`null`) the signed-in person's Reaction to a Video.
-// Over the limit (429) the message says how long to wait. Called from the browser.
-export async function reactToVideo(
-  videoId: string,
+// Sets (`kind`) or removes (`null`) the signed-in person's Reaction at an
+// address. Over the limit (429) the message says how long to wait.
+async function sendReaction(
+  url: string,
   kind: ReactionKind | null,
-  baseUrl: string = getApiBaseUrl(),
 ): Promise<{ ok: true; state: ReactionState } | { ok: false; message: string }> {
   try {
-    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/reaction`, {
+    const response = await fetch(url, {
       method: kind ? "PUT" : "DELETE",
       credentials: "include",
       ...(kind
@@ -311,6 +310,25 @@ export async function reactToVideo(
   } catch {
     return { ok: false, message: UNREACHABLE };
   }
+}
+
+// Sets (`kind`) or removes (`null`) the signed-in person's Reaction to a Video.
+// Called from the browser.
+export function reactToVideo(videoId: string, kind: ReactionKind | null, baseUrl: string = getApiBaseUrl()) {
+  return sendReaction(`${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/reaction`, kind);
+}
+
+// The same for a Comment or Reply. Called from the browser.
+export function reactToComment(
+  videoId: string,
+  commentId: string,
+  kind: ReactionKind | null,
+  baseUrl: string = getApiBaseUrl(),
+) {
+  return sendReaction(
+    `${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}/reaction`,
+    kind,
+  );
 }
 
 export const THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024;
@@ -434,6 +452,10 @@ export type Comment = {
   deleted: boolean;
   createdAt: string;
   replyCount: number;
+  likes: number;
+  myReaction: ReactionKind | null;
+  // Only the Video's owner is given the Dislike count.
+  dislikes?: number;
 };
 
 export const COMMENT_MAX = 1000;

@@ -1,6 +1,7 @@
 import { HttpError } from "../errors.ts";
 import { enrich } from "../lib/wide-event.ts";
 import { CommentRepository } from "../repositories/comments.repository.ts";
+import { ReactionRepository } from "../repositories/reactions.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
 const BODY_MAX = 1000;
@@ -12,7 +13,7 @@ const WRITE_WINDOW_MS = 60_000;
 // The Video a person may read or write Comments on: one they can watch, once
 // it is ready. A private Video is only the owner's; like a missing or deleted
 // one it is not found for anyone else.
-async function commentableVideo(viewerId: string | undefined, videoId: string) {
+export async function commentableVideo(viewerId: string | undefined, videoId: string) {
   enrich({ videoId });
   const video = await VideoRepository.findForComments(videoId);
   const isOwner = viewerId !== undefined && video?.channel.userId === viewerId;
@@ -24,7 +25,7 @@ async function commentableVideo(viewerId: string | undefined, videoId: string) {
 }
 
 // Writing and editing stop while the owner has Comments off.
-function requireCommentsOn(commentsEnabled: boolean) {
+export function requireCommentsOn(commentsEnabled: boolean) {
   if (!commentsEnabled) throw new HttpError(409, "Comments are turned off for this video.");
 }
 
@@ -60,8 +61,10 @@ function present(
   },
   ownerId: string,
   viewerId: string | undefined,
+  reactions: Reactions,
 ) {
   const deleted = comment.deletedAt !== null;
+  const counts = reactions.counts.get(comment.id);
   return {
     id: comment.id,
     parentId: comment.parentId,
@@ -75,10 +78,34 @@ function present(
     hidden: !deleted && viewerId === ownerId && comment.hiddenAt !== null,
     createdAt: comment.createdAt,
     replyCount: comment._count.replies,
+    // A placeholder carries no Reactions. Dislikes go to the Video's owner only.
+    likes: deleted ? 0 : counts?.likes ?? 0,
+    myReaction: deleted ? null : reactions.mine.get(comment.id) ?? null,
+    ...(!deleted && viewerId === ownerId ? { dislikes: counts?.dislikes ?? 0 } : {}),
   };
 }
 
-const commentNotFound = () => new HttpError(404, "Comment not found.");
+type Reactions = {
+  counts: Awaited<ReturnType<typeof ReactionRepository.countsForComments>>;
+  mine: Awaited<ReturnType<typeof ReactionRepository.mineForComments>>;
+};
+
+// Presents a page of Comments with their Reactions: one grouped query for the
+// counts and one for the viewer's own, however many are listed.
+async function presentAll<T extends Parameters<typeof present>[0]>(
+  rows: T[],
+  ownerId: string,
+  viewerId: string | undefined,
+) {
+  const ids = rows.filter((row) => row.deletedAt === null).map((row) => row.id);
+  const [counts, mine] = await Promise.all([
+    ReactionRepository.countsForComments(ids),
+    viewerId ? ReactionRepository.mineForComments(viewerId, ids) : new Map() as Reactions["mine"],
+  ]);
+  return rows.map((row) => present(row, ownerId, viewerId, { counts, mine }));
+}
+
+export const commentNotFound = () => new HttpError(404, "Comment not found.");
 
 // The author's own live Comment; someone else's, a missing or a deleted one is not found.
 async function ownComment(videoId: string, commentId: string, authorId: string) {
@@ -110,7 +137,7 @@ export const CommentService = {
     if (!commentsEnabled && !isOwner) return { comments: [], page, hasMore: false };
 
     const rows = await CommentRepository.listTopLevel(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE);
-    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, ownerId, viewerId));
+    const comments = await presentAll(rows.slice(0, PAGE_SIZE), ownerId, viewerId);
     enrich({ commentCount: comments.length });
     return { comments, page, hasMore: rows.length > PAGE_SIZE };
   },
@@ -124,7 +151,7 @@ export const CommentService = {
       throw commentNotFound();
     }
 
-    const replies = (await CommentRepository.listReplies(commentId, viewerId)).map((row) => present(row, ownerId, viewerId));
+    const replies = await presentAll(await CommentRepository.listReplies(commentId, viewerId), ownerId, viewerId);
     enrich({ commentCount: replies.length });
     return { replies };
   },
@@ -157,7 +184,7 @@ export const CommentService = {
     await limitWriting(authorId);
     const comment = await CommentRepository.create({ videoId, authorId, parentId: topLevelId, body: text });
     enrich({ commentId: comment.id });
-    return present(comment, ownerId, authorId);
+    return (await presentAll([comment], ownerId, authorId))[0]!;
   },
 
   // Changes the author's own Comment. Someone else's, a missing or a deleted
@@ -176,7 +203,7 @@ export const CommentService = {
     }
     const changed = await CommentRepository.findWithAuthor(commentId, authorId);
     if (!changed || changed.deletedAt) throw commentNotFound();
-    return present(changed, ownerId, authorId);
+    return (await presentAll([changed], ownerId, authorId))[0]!;
   },
 
   // The Comments and Replies the owner has hidden, newest first, with how many
@@ -192,7 +219,7 @@ export const CommentService = {
       CommentRepository.listHidden(videoId, viewerId, (page - 1) * PAGE_SIZE, PAGE_SIZE),
       CommentRepository.countHidden(videoId),
     ]);
-    const comments = rows.slice(0, PAGE_SIZE).map((row) => present(row, viewerId, viewerId));
+    const comments = await presentAll(rows.slice(0, PAGE_SIZE), viewerId, viewerId);
     enrich({ commentCount: comments.length });
     return { comments, page, hasMore: rows.length > PAGE_SIZE, total };
   },
