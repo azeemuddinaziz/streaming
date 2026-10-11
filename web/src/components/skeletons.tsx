@@ -60,6 +60,20 @@ export function RowListSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
+// Subscriptions: a name and a button on one row.
+export function SubscriptionRowsSkeleton({ count = 5 }: { count?: number }) {
+  return (
+    <ul className="my-6 grid gap-3" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i} className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-9 w-28" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function FormSkeleton({ fields = 2 }: { fields?: number }) {
   return (
     <div className="my-8 grid gap-5" aria-hidden="true">

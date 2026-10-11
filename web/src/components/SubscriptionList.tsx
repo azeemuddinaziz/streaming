@@ -5,7 +5,8 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { InfiniteList } from "@/components/InfiniteList";
 import { SubscribeButton } from "@/components/SubscribeButton";
-import { RowListSkeleton } from "@/components/skeletons";
+import { SubscriptionRowsSkeleton } from "@/components/skeletons";
+import { SubscriptionsEmpty } from "@/components/SubscriptionsEmpty";
 import { getSubscriptionsPage, setSubscription, type SubscribedChannel } from "@/lib/api-client";
 
 const NOUN = { singular: "channel", plural: "channels" };
@@ -17,23 +18,14 @@ function isSubscribedChannel(value: unknown): value is SubscribedChannel {
 }
 
 const getId = (channel: SubscribedChannel) => channel.name;
-const skeleton = <RowListSkeleton count={3} />;
-
-function Empty() {
-  return (
-    <div className="grid justify-items-start gap-2 rounded-lg border bg-card p-6">
-      <p>You have not subscribed to any channels yet.</p>
-      <Link className="text-primary underline underline-offset-4" href="/">
-        Find something to watch
-      </Link>
-    </div>
-  );
-}
+const skeleton = <SubscriptionRowsSkeleton count={3} />;
 
 // The signed-in person's Subscriptions: page 1 from the server, the rest from the
 // API. Unsubscribing takes the row away at once, with an Undo that subscribes again.
 export function SubscriptionList({ channels, hasMore }: { channels: SubscribedChannel[]; hasMore: boolean }) {
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
+  // Counts the API last returned, so a row brought back by Undo is not stale.
+  const [counts, setCounts] = useState<Readonly<Record<string, number>>>({});
 
   const setHidden = useCallback((name: string, hide: boolean) => {
     setRemoved((previous) => {
@@ -45,10 +37,16 @@ export function SubscriptionList({ channels, hasMore }: { channels: SubscribedCh
   }, []);
 
   const undo = useCallback(
-    async (name: string) => {
+    async (name: string): Promise<void> => {
       const result = await setSubscription(name, true);
-      if (result.ok) setHidden(name, false);
-      else toast.error(`Could not subscribe to ${name} again. ${result.message}`);
+      if (result.ok) {
+        setCounts((previous) => ({ ...previous, [name]: result.state.subscribers }));
+        setHidden(name, false);
+      } else {
+        toast.error(`Could not subscribe to ${name} again. ${result.message}`, {
+          action: { label: "Try again", onClick: () => void undo(name) },
+        });
+      }
     },
     [setHidden],
   );
@@ -69,10 +67,11 @@ export function SubscriptionList({ channels, hasMore }: { channels: SubscribedCh
           channelName={channel.name}
           signedIn
           isOwner={false}
-          subscribers={channel.subscribers}
+          subscribers={counts[channel.name] ?? channel.subscribers}
           subscribed
           onChange={(state) => {
             if (state.subscribed) return;
+            setCounts((previous) => ({ ...previous, [channel.name]: state.subscribers }));
             setHidden(channel.name, true);
             toast(`Unsubscribed from ${channel.name}`, {
               action: { label: "Undo", onClick: () => void undo(channel.name) },
@@ -81,7 +80,7 @@ export function SubscriptionList({ channels, hasMore }: { channels: SubscribedCh
         />
       </li>
     ),
-    [setHidden, undo],
+    [setHidden, undo, counts],
   );
 
   return (
@@ -100,7 +99,7 @@ export function SubscriptionList({ channels, hasMore }: { channels: SubscribedCh
       label="Subscribed channels"
       className="my-6 grid gap-3"
       hidden={removed}
-      empty={<Empty />}
+      empty={<SubscriptionsEmpty />}
     />
   );
 }

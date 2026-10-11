@@ -95,6 +95,16 @@ export function InfiniteList<T>({
   const touched = useRef(false);
   const listRef = useRef(list);
   listRef.current = list;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+
+  // What goes to sessionStorage leaves out hidden items, so Back does not bring
+  // back a row the person removed.
+  const snapshotOf = (current: PagedList<T>) => {
+    const gone = hiddenRef.current;
+    const items = gone === undefined ? current.items : current.items.filter((item) => !gone.has(getId(item)));
+    return { ...current, items, scrollY: scrollY.current };
+  };
 
   // Back: bring back the pages loaded before leaving, then the scroll position
   // once they have rendered.
@@ -123,7 +133,7 @@ export function InfiniteList<T>({
     // person scrolls; saving earlier would overwrite a snapshot not yet restored.
     const save = () => {
       if (!touched.current && listRef.current === initial) return;
-      saveSnapshot(window.sessionStorage, listKey, { ...listRef.current, scrollY: scrollY.current });
+      saveSnapshot(window.sessionStorage, listKey, snapshotOf(listRef.current));
     };
 
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -144,10 +154,10 @@ export function InfiniteList<T>({
   }, [listKey]);
 
   useEffect(() => {
-    if (list === initial) return;
-    saveSnapshot(window.sessionStorage, listKey, { ...list, scrollY: scrollY.current });
+    if (list === initial && (hidden === undefined || hidden.size === 0)) return;
+    saveSnapshot(window.sessionStorage, listKey, snapshotOf(list));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listKey, list]);
+  }, [listKey, list, hidden]);
 
   const loadMore = useCallback(async () => {
     if (busy.current) return;

@@ -10,7 +10,8 @@ vi.mock("@/lib/api-client", () => ({
   getSubscriptionsPage: (...a: unknown[]) => getSubscriptionsPage(...a),
 }));
 const toastFn = vi.fn();
-vi.mock("sonner", () => ({ toast: Object.assign((...a: unknown[]) => toastFn(...a), { error: vi.fn() }) }));
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: Object.assign((...a: unknown[]) => toastFn(...a), { error: (...a: unknown[]) => toastError(...a) }) }));
 
 import { SubscriptionList } from "./SubscriptionList";
 
@@ -20,6 +21,7 @@ beforeEach(() => {
   setSubscription.mockReset();
   getSubscriptionsPage.mockReset();
   toastFn.mockReset();
+  toastError.mockReset();
   window.sessionStorage.clear();
 });
 
@@ -56,5 +58,29 @@ describe("SubscriptionList", () => {
     await userEvent.click(screen.getByRole("button", { name: "Subscribed" }));
 
     expect(await screen.findByRole("link", { name: "Find something to watch" })).toHaveAttribute("href", "/");
+  });
+
+  it("keeps a removed row out of the Back snapshot", async () => {
+    setSubscription.mockResolvedValue({ ok: true, state: { subscribed: false, subscribers: 2 } });
+    render(<SubscriptionList channels={[channel("ann"), channel("bo")]} hasMore={false} />);
+    await userEvent.click(screen.getAllByRole("button", { name: "Subscribed" })[0]);
+
+    const saved = Object.entries(window.sessionStorage).find(([key]) => key.includes("subscriptions"));
+    expect(saved).toBeDefined();
+    expect(saved![1]).not.toContain("ann");
+    expect(saved![1]).toContain("bo");
+  });
+
+  it("offers Try again when Undo fails, and the row stays away", async () => {
+    setSubscription.mockResolvedValueOnce({ ok: true, state: { subscribed: false, subscribers: 2 } });
+    render(<SubscriptionList channels={[channel("ann"), channel("bo")]} hasMore={false} />);
+    await userEvent.click(screen.getAllByRole("button", { name: "Subscribed" })[0]);
+
+    setSubscription.mockResolvedValueOnce({ ok: false, message: "Slow down." });
+    toastFn.mock.calls[0][1].action.onClick();
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    expect(toastError.mock.calls[0][1].action.label).toBe("Try again");
+    expect(screen.queryByText("ann")).not.toBeInTheDocument();
   });
 });

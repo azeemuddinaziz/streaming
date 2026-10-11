@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AlertTriangleIcon } from "lucide-react";
 import { SubscriptionList } from "@/components/SubscriptionList";
+import { SubscriptionsEmpty } from "@/components/SubscriptionsEmpty";
 import { Button } from "@/components/ui/button";
 import { getSubscriptions } from "@/lib/api-client";
 
@@ -36,12 +36,7 @@ export default async function SubscriptionsPage() {
           </Button>
         </div>
       ) : result.channels.length === 0 ? (
-        <div className="grid justify-items-start gap-3 rounded-lg border bg-card p-6">
-          <p>You have not subscribed to any channels yet.</p>
-          <Button asChild>
-            <Link href="/">Find something to watch</Link>
-          </Button>
-        </div>
+        <SubscriptionsEmpty />
       ) : (
         <SubscriptionList channels={result.channels} hasMore={result.hasMore} />
       )}
