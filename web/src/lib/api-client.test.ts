@@ -12,6 +12,7 @@ import {
   setCommentHidden,
   getReplies,
   postComment,
+  reactToComment,
   reactToVideo,
   getCurrentUser,
   getPublicVideos,
@@ -533,6 +534,41 @@ describe("postComment over the rate limit", () => {
     const result = await postComment("v1", { body: "hi" }, baseUrl);
     expect(result).toMatchObject({ ok: false });
     expect(result.ok === false && result.message).toMatch(/12 seconds/);
+  });
+});
+
+describe("reactToComment", () => {
+  it("sets with PUT and removes with DELETE at the Comment's address", async () => {
+    const seen: string[] = [];
+    stub = createServer((req, res) => {
+      let raw = "";
+      req.on("data", (chunk) => (raw += chunk));
+      req.on("end", () => {
+        seen.push(`${req.method} ${req.url} ${raw}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ likes: 2, myReaction: req.method === "PUT" ? "DISLIKE" : null }));
+      });
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await reactToComment("v1", "c1", "DISLIKE", baseUrl)).toEqual({
+      ok: true,
+      state: { likes: 2, myReaction: "DISLIKE" },
+    });
+    await reactToComment("v1", "c1", null, baseUrl);
+    expect(seen).toEqual([
+      'PUT /api/v1/videos/v1/comments/c1/reaction {"kind":"DISLIKE"}',
+      "DELETE /api/v1/videos/v1/comments/c1/reaction ",
+    ]);
+  });
+
+  it("keeps the API's message for a refused Reaction", async () => {
+    const baseUrl = await startStubApi(409);
+
+    const result = await reactToComment("v1", "c1", "LIKE", baseUrl);
+
+    expect(result).toEqual({ ok: false, message: "stub" });
   });
 });
 

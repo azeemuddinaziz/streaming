@@ -10,4 +10,14 @@ export const ReactionController = {
   async remove(req: Request, res: Response) {
     res.status(200).json(await ReactionService.remove(req.user!.id, req.params.id as string));
   },
+
+  async setOnComment(req: Request, res: Response) {
+    const { id, commentId } = req.params as { id: string; commentId: string };
+    res.status(200).json(await ReactionService.setOnComment(req.user!.id, id, commentId, (req.body ?? {}).kind));
+  },
+
+  async removeFromComment(req: Request, res: Response) {
+    const { id, commentId } = req.params as { id: string; commentId: string };
+    res.status(200).json(await ReactionService.removeFromComment(req.user!.id, id, commentId));
+  },
 };

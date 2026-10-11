@@ -149,6 +149,8 @@ describe("deleting a Comment", () => {
       hidden: false,
       createdAt: parent.createdAt,
       replyCount: 1,
+      likes: 0,
+      myReaction: null,
     });
     expect(JSON.stringify(listed)).not.toContain("parent text");
 

@@ -145,6 +145,7 @@ model Comment {
   editedAt  DateTime?
   deletedAt DateTime?
   hiddenAt  DateTime?
+  reactions Reaction[]
 
   @@index([videoId, parentId, createdAt])
   @@index([parentId, createdAt])
@@ -157,20 +158,25 @@ enum ReactionKind {
   DISLIKE
 }
 
-// A User's Like or Dislike of a Video: at most one per User and Video, replaced
-// or deleted as they change their mind (GLOSSARY, Reaction). `updatedAt` is what
-// the per-User write limit counts.
+// A User's Like or Dislike of a Video or of a Comment: at most one per User and
+// target, replaced or deleted as they change their mind (GLOSSARY, Reaction).
+// Exactly one of `videoId` and `commentId` is set (a CHECK in the migration).
+// `updatedAt` is what the per-User write limit counts, across both targets.
 model Reaction {
   id        String       @id @default(uuid())
   userId    String
   user      User         @relation(fields: [userId], references: [id])
-  videoId   String
-  video     Video        @relation(fields: [videoId], references: [id])
+  videoId   String?
+  video     Video?       @relation(fields: [videoId], references: [id])
+  commentId String?
+  comment   Comment?     @relation(fields: [commentId], references: [id])
   kind      ReactionKind
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   @@unique([userId, videoId])
+  @@unique([userId, commentId])
   @@index([videoId, kind])
+  @@index([commentId, kind])
   @@index([userId, updatedAt])
 }

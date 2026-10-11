@@ -169,6 +169,9 @@ components:
         deleted: { type: boolean, description: "A deleted Comment that still has Replies: a placeholder with no author and no text, closed to new Replies." }
         createdAt: { type: string, format: date-time }
         replyCount: { type: integer, description: "Visible Replies; always 0 on a Reply." }
+        likes: { type: integer, description: "Likes on the Comment; 0 on a placeholder." }
+        myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE], description: "The caller's own Reaction; null when signed out, none, or a placeholder." }
+        dislikes: { type: integer, description: "Only present for the Video's owner (never for the Comment's author). Omitted on a placeholder." }
       example:
         id: 3f2b6c1e-0d54-4c0a-9a7b-6f1d2e8a4b90
         parentId: null
@@ -181,6 +184,8 @@ components:
         edited: false
         deleted: false
         replyCount: 1
+        likes: 2
+        myReaction: null
     ChannelVideo:
       type: object
       properties:
@@ -832,6 +837,94 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: This video is not ready for reactions. }
+  /videos/{id}/comments/{commentId}/reaction:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+      - name: commentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+        description: The Comment or Reply's id.
+    put:
+      tags: [Watching]
+      summary: Like or Dislike a Comment or Reply
+      description: |
+        Signed in only. Sets the caller's Reaction to the Comment, replacing the one they had;
+        repeating the same kind changes nothing. Same response shape as a Video Reaction, but
+        `dislikes` is present only for the owner of the Video the Comment is on, not for the
+        Comment's author.
+
+        Errors: the Video rules of other Comment writes (a missing, deleted or someone else's
+        PRIVATE Video is 404; a Video that is not READY is 409), Comments off is 409, a missing
+        Comment, one on another Video, or a deleted Reply is 404. A Hidden Comment, a deleted
+        placeholder, or a Reply under a hidden or deleted parent is 409 for everyone, the author
+        included. Editing a Comment keeps its Reactions; hiding or deleting keeps them too and they
+        come back on un-hide.
+
+        Rate limit: the same 30 per User per minute as Video Reactions; Reactions on Videos and on
+        Comments count together. The 31st is 429 with `Retry-After`. Checked last.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [LIKE, DISLIKE] }
+            example: { kind: LIKE }
+      responses:
+        "200":
+          description: The counts the caller may see, and their Reaction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReactionState" }
+        "400":
+          description: The kind is missing or not LIKE or DISLIKE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: A reaction is LIKE or DISLIKE. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY or has Comments off, or the Comment is hidden, a placeholder, or under a hidden or deleted parent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: That comment can no longer be reacted to. }
+        "429":
+          description: Thirty Reaction changes already made in the last minute.
+          headers:
+            Retry-After:
+              description: Seconds until another may be made.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: You are reacting too fast. Slow down and try again shortly. }
+    delete:
+      tags: [Watching]
+      summary: Remove your Reaction to a Comment
+      description: |
+        Signed in only. Removes the caller's Reaction (the row is deleted); having none still
+        succeeds. Same rules as setting one, except it is not rate limited.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: "The counts the caller may see, and a null `myReaction`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReactionState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY or has Comments off, or the Comment is hidden, a placeholder, or under a hidden or deleted parent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: That comment can no longer be reacted to. }
   /videos/{id}/comments/hidden:
     parameters:
       - { $ref: "#/components/parameters/VideoId" }

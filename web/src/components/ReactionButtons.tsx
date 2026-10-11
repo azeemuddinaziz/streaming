@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { reactToVideo, type ReactionKind } from "@/lib/api-client";
+import { reactToComment, reactToVideo, type ReactionKind } from "@/lib/api-client";
 
 type Props = {
   videoId: string;
+  // Given, the buttons react to this Comment or Reply instead of the Video.
+  commentId?: string;
   signedIn: boolean;
   likes: number;
   // Only given to the Video's owner.
@@ -13,10 +15,10 @@ type Props = {
   myReaction: ReactionKind | null;
 };
 
-// Like and Dislike. Pressing the active one takes the Reaction away. The page
+// Like and Dislike of a Video or a Comment. Pressing the active one takes the Reaction away. The page
 // updates at once and goes back, with a message, if the API refuses.
 export function ReactionButtons(props: Props) {
-  const { videoId, signedIn } = props;
+  const { videoId, commentId, signedIn } = props;
   const [likes, setLikes] = useState(props.likes);
   const [dislikes, setDislikes] = useState(props.dislikes);
   const [mine, setMine] = useState(props.myReaction);
@@ -35,7 +37,7 @@ export function ReactionButtons(props: Props) {
     setLikes(bump(likes, mine === "LIKE", next === "LIKE"));
     if (dislikes !== undefined) setDislikes(bump(dislikes, mine === "DISLIKE", next === "DISLIKE"));
 
-    const result = await reactToVideo(videoId, next);
+    const result = commentId ? await reactToComment(videoId, commentId, next) : await reactToVideo(videoId, next);
     setBusy(false);
     if (result.ok) {
       setLikes(result.state.likes);
@@ -52,7 +54,7 @@ export function ReactionButtons(props: Props) {
   const count = (n: number) => n.toLocaleString("en");
 
   return (
-    <div className="reactions">
+    <div className="reactions" role="group" aria-label={commentId ? "React to this comment" : "React to this video"}>
       <button
         className="button button-secondary"
         type="button"

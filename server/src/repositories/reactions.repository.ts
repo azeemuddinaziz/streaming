@@ -38,7 +38,7 @@ export class ReactionRepository {
     const counts = new Map<string, { likes: number; dislikes: number }>();
     for (const id of videoIds) counts.set(id, { likes: 0, dislikes: 0 });
     for (const row of rows) {
-      counts.get(row.videoId)![row.kind === "LIKE" ? "likes" : "dislikes"] = row._count._all;
+      counts.get(row.videoId!)![row.kind === "LIKE" ? "likes" : "dislikes"] = row._count._all;
     }
     return counts;
   }
@@ -47,6 +47,53 @@ export class ReactionRepository {
   static async find(userId: string, videoId: string) {
     const reaction = await prisma.reaction.findUnique({
       where: { userId_videoId: { userId, videoId } },
+      select: { kind: true },
+    });
+    return reaction?.kind ?? null;
+  }
+
+  // The same for Comments, in one query for however many are listed.
+  static async countsForComments(commentIds: string[]) {
+    const rows = await prisma.reaction.groupBy({
+      by: ["commentId", "kind"],
+      where: { commentId: { in: commentIds } },
+      _count: { _all: true },
+    });
+    const counts = new Map<string, { likes: number; dislikes: number }>();
+    for (const id of commentIds) counts.set(id, { likes: 0, dislikes: 0 });
+    for (const row of rows) {
+      counts.get(row.commentId!)![row.kind === "LIKE" ? "likes" : "dislikes"] = row._count._all;
+    }
+    return counts;
+  }
+
+  // The kinds of the User's own Reactions to the listed Comments, by Comment id.
+  static async mineForComments(userId: string, commentIds: string[]) {
+    const rows = await prisma.reaction.findMany({
+      where: { userId, commentId: { in: commentIds } },
+      select: { commentId: true, kind: true },
+    });
+    return new Map(rows.map((row) => [row.commentId!, row.kind]));
+  }
+
+  // Sets the User's Reaction to the Comment, replacing the one they had.
+  static async setOnComment(userId: string, commentId: string, kind: ReactionKind) {
+    await prisma.reaction.upsert({
+      where: { userId_commentId: { userId, commentId } },
+      create: { userId, commentId, kind },
+      update: { kind },
+    });
+  }
+
+  // Takes the User's Reaction to the Comment away, if they have one.
+  static async removeFromComment(userId: string, commentId: string) {
+    await prisma.reaction.deleteMany({ where: { userId, commentId } });
+  }
+
+  // The kind of the User's own Reaction to the Comment, or null.
+  static async findOnComment(userId: string, commentId: string) {
+    const reaction = await prisma.reaction.findUnique({
+      where: { userId_commentId: { userId, commentId } },
       select: { kind: true },
     });
     return reaction?.kind ?? null;
