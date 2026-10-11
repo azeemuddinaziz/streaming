@@ -364,6 +364,26 @@ export async function getSubscriptions(
   }
 }
 
+// For the browser: a later page of the person's Subscriptions, for the infinite list.
+export async function getSubscriptionsPage(
+  page: number,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; channels: SubscribedChannel[]; page: number; hasMore: boolean } | { ok: false }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/users/me/subscriptions?page=${page}`, {
+      credentials: "include",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false };
+
+    const body = await response.json();
+    if (!Array.isArray(body.channels)) return { ok: false };
+    return { ok: true, channels: body.channels, page: body.page, hasMore: body.hasMore };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export type SubscriptionState = { subscribed: boolean; subscribers: number };
 
 // Subscribes the signed-in person to a Channel (`subscribe`), or ends it.

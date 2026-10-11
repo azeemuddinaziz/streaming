@@ -57,6 +57,11 @@ type Props<T> = {
   noun: { singular: string; plural: string };
   label: string;
   className?: string;
+  // Ids to leave out of what is shown (kept in the loaded pages), such as a
+  // row the person just removed and may still undo.
+  hidden?: ReadonlySet<string>;
+  // Shown once everything loaded is hidden and there is nothing more to load.
+  empty?: React.ReactNode;
 };
 
 // A list whose first page comes from the server and whose later pages load as
@@ -73,6 +78,8 @@ export function InfiniteList<T>({
   noun,
   label,
   className,
+  hidden,
+  empty,
 }: Props<T>) {
   const [list, setList] = useState<PagedList<T>>(initial);
   const [loading, setLoading] = useState(false);
@@ -181,10 +188,15 @@ export function InfiniteList<T>({
     return () => observer.disconnect();
   }, [canObserve, list, loading, failed, loadMore]);
 
+  const shown = hidden === undefined ? list.items : list.items.filter((item) => !hidden.has(getId(item)));
+  const allGone = shown.length === 0 && !list.hasMore && empty !== undefined;
+
+  if (allGone) return <>{empty}</>;
+
   return (
     <div>
       <ul className={className} aria-label={label}>
-        {list.items.map((item) => renderItem(item))}
+        {shown.map((item) => renderItem(item))}
         {loading && skeleton}
       </ul>
 
@@ -210,7 +222,7 @@ export function InfiniteList<T>({
             Load more
           </Button>
         )}
-        {!list.hasMore && list.items.length > 0 && (
+        {!list.hasMore && shown.length > 0 && (
           <p className="text-sm text-muted-foreground">You have reached the end.</p>
         )}
       </div>

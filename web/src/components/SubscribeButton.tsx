@@ -12,6 +12,8 @@ type Props = {
   isOwner: boolean;
   subscribers: number;
   subscribed: boolean;
+  // Called once the API has confirmed a change.
+  onChange?: (state: { subscribed: boolean; subscribers: number }) => void;
 };
 
 // Subscribe to a Channel, or end it. The page updates at once and goes back,
@@ -38,6 +40,7 @@ export function SubscribeButton(props: Props) {
     if (result.ok) {
       setSubscribed(result.state.subscribed);
       setSubscribers(result.state.subscribers);
+      props.onChange?.(result.state);
     } else {
       setSubscribed(before.subscribed);
       setSubscribers(before.subscribers);

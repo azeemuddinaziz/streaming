@@ -333,29 +333,3 @@ progress {
   flex-basis: 100%;
 }
 
-.subscription-list {
-  display: grid;
-  gap: 1rem;
-  margin: 2rem 0;
-  padding: 0;
-  list-style: none;
-}
-
-.subscription-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
