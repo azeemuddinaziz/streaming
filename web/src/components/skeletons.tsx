@@ -6,16 +6,23 @@ export function PageTitleSkeleton() {
   return <Skeleton className="mb-8 h-12 w-2/3 max-w-md" />;
 }
 
-// Mirrors VideoCard in the .channel-grid.
+// Mirrors VideoCard.
+export function VideoCardSkeleton() {
+  return (
+    <li className="grid content-start gap-2" aria-hidden="true">
+      <Skeleton className="aspect-video w-full" />
+      <Skeleton className="h-5 w-4/5" />
+      <Skeleton className="h-4 w-1/2" />
+    </li>
+  );
+}
+
+// The grid of VideoCards in the .channel-grid.
 export function VideoGridSkeleton({ count = 12 }: { count?: number }) {
   return (
     <ul className="channel-grid" aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
-        <li key={i} className="grid gap-2">
-          <Skeleton className="aspect-video w-full" />
-          <Skeleton className="h-5 w-4/5" />
-          <Skeleton className="h-4 w-1/2" />
-        </li>
+        <VideoCardSkeleton key={i} />
       ))}
     </ul>
   );

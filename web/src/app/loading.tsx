@@ -2,7 +2,7 @@ import { LoadingRegion, PageTitleSkeleton, VideoGridSkeleton } from "@/component
 
 export default function Loading() {
   return (
-    <LoadingRegion label="Loading videos" className="showcase">
+    <LoadingRegion label="Loading videos">
       <PageTitleSkeleton />
       <VideoGridSkeleton />
     </LoadingRegion>
