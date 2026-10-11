@@ -17,7 +17,12 @@ function select(tab, focus) {
 tabs.forEach((tab, i) => {
   tab.addEventListener("click", () => select(tab, false));
   tab.addEventListener("keydown", (e) => {
-    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    const next = {
+      ArrowRight: i + 1,
+      ArrowLeft: i - 1,
+      Home: 0,
+      End: tabs.length - 1,
+    }[e.key];
     if (next === undefined) return;
     e.preventDefault();
     select(tabs[(next + tabs.length) % tabs.length], true);
@@ -36,7 +41,11 @@ if (slot) {
   } else {
     slot.querySelector("button").addEventListener("click", () => {
       const frame = document.createElement("iframe");
-      const q = new URLSearchParams({ autoplay: "1", cc_load_policy: "1", rel: "0" });
+      const q = new URLSearchParams({
+        autoplay: "1",
+        cc_load_policy: "1",
+        rel: "0",
+      });
       frame.src = `https://www.youtube-nocookie.com/embed/${DEMO_VIDEO_ID}?${q}`;
       frame.title = "StreamSouk demo video";
       frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
