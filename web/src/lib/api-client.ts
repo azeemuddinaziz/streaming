@@ -335,6 +335,34 @@ export function reactToComment(
   );
 }
 
+export type SubscribedChannel = { name: string; subscribers: number; subscribed: true };
+
+export type SubscriptionsResult =
+  | { ok: true; channels: SubscribedChannel[]; page: number; hasMore: boolean }
+  | { ok: false; reason: "signed-out" | "unavailable" };
+
+// For server components: one page of the Channels the signed-in person
+// subscribes to, most recent first.
+export async function getSubscriptions(
+  page: number,
+  cookie: string,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<SubscriptionsResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/users/me/subscriptions?page=${page}`, {
+      headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 401) return { ok: false, reason: "signed-out" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    return { ok: true, ...(await response.json()) };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
 export type SubscriptionState = { subscribed: boolean; subscribers: number };
 
 // Subscribes the signed-in person to a Channel (`subscribe`), or ends it.

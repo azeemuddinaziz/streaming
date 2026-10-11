@@ -25,6 +25,31 @@ export class SubscriptionRepository {
     return await prisma.subscription.count({ where: { channelId } });
   }
 
+  // The User's Subscriptions, most recently made first. Asks for one extra row
+  // so the caller can tell if another page follows.
+  static async listForUser(userId: string, skip: number, take: number) {
+    const rows = await prisma.subscription.findMany({
+      where: { userId },
+      select: { channelId: true, channel: { select: { user: { select: { name: true } } } } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take: take + 1,
+    });
+    return rows.map((row) => ({ channelId: row.channelId, name: row.channel.user.name }));
+  }
+
+  // The Subscriber count of each of the Channels, in one query.
+  static async countsFor(channelIds: string[]) {
+    const rows = await prisma.subscription.groupBy({
+      by: ["channelId"],
+      where: { channelId: { in: channelIds } },
+      _count: { _all: true },
+    });
+    const counts = new Map<string, number>(channelIds.map((id) => [id, 0]));
+    for (const row of rows) counts.set(row.channelId, row._count._all);
+    return counts;
+  }
+
   // When the User's most recent Subscriptions were made, newest first, up to
   // `take` of them, none older than `since`. Feeds the write limit.
   static async recentlyCreated(userId: string, since: Date, take: number) {
