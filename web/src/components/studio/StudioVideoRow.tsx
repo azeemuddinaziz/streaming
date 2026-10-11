@@ -1,11 +1,10 @@
-import { FilmIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import { FilmIcon, PencilIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 import Link from "next/link";
 import { DeleteVideoButton } from "@/components/DeleteVideoButton";
 import { RetryButton } from "@/components/RetryButton";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl, type StudioVideo } from "@/lib/api-client";
 import { relativeDate } from "@/lib/relative-date";
-import { EditDetails } from "./EditDetails";
 import { StatusBadge } from "./StatusBadge";
 import { VisibilityBadge } from "./VisibilityBadge";
 
@@ -69,6 +68,12 @@ export function StudioVideoRow({ video }: { video: StudioVideo }) {
           </span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/studio/videos/${video.id}`}>
+              <PencilIcon aria-hidden="true" />
+              Edit<span className="sr-only"> details of {video.label}</span>
+            </Link>
+          </Button>
           {ready && (
             <Button asChild variant="outline" size="sm">
               <Link href={`/watch/${video.id}`}>Watch</Link>
@@ -78,8 +83,6 @@ export function StudioVideoRow({ video }: { video: StudioVideo }) {
           <DeleteVideoButton videoId={video.id} label={video.label} />
         </div>
       </div>
-
-      <EditDetails video={video} />
     </li>
   );
 }

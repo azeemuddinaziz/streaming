@@ -45,6 +45,7 @@ export class VideoRepository {
       where: { id: videoId, deletedAt: null },
       include: {
         channel: { select: { id: true, userId: true, user: { select: { name: true } } } },
+        upload: { select: { filename: true } },
         _count: {
           select: { views: true, comments: { where: countedComments } },
         },

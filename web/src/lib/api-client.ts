@@ -262,6 +262,10 @@ export type WatchVideo = {
   myReaction: ReactionKind | null;
   // Only the owner is told how many Dislikes there are.
   dislikes?: number;
+  // Only the owner gets these: the studio list's label (the title, else the
+  // Upload's filename) and the Thumbnail's address (null until ready).
+  label?: string;
+  thumbnailPath?: string | null;
   // The Channel's public Subscriber count, and whether the signed-in person
   // subscribes (null when signed out).
   subscribers: number;
