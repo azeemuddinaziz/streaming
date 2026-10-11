@@ -13,6 +13,18 @@
   --color-on-accent: #ffffff;
 }
 
+/* Cards and code blocks are dark: the same token names with dark values, scoped to them. */
+ul.plain li, .card, pre {
+  --color-surface: #211e1b;
+  --color-ink: #f4f0e9;
+  --color-muted: #b9b1a4;
+  --color-border: #3b362f;
+  --color-accent: #fb923c;
+  --color-accent-hover: #fdba74;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {

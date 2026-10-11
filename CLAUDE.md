@@ -148,7 +148,7 @@ Styling is Tailwind CSS 4 (`@tailwindcss/postcss`) with shadcn/ui on Radix (ADR 
 
 ## Landing page
 
-`landing/` is the public page that stands in for a hosted instance: demo video, what the app does, engineering decisions with links to proof in the repo, how to run it, and a GitHub Sponsors link. Its colors are the `docs/design.md` tokens (as CSS variables, light only, with a white page background) and it loads nothing third-party until the demo video is clicked (`youtube-nocookie.com`; the id is `DEMO_VIDEO_ID` in `landing/script.js`). The Docker and manual command blocks are copied from `README.md`: when those commands change, the landing page must change in the same ticket, and the other way round. No analytics, cookie banner, sign-in or API calls.
+`landing/` is the public page that stands in for a hosted instance: demo video, what the app does, engineering decisions with links to proof in the repo, how to run it, and a GitHub Sponsors link. Its colors are the `docs/design.md` tokens (as CSS variables, light only, with a white page background and dark cards and code blocks) and it loads nothing third-party until the demo video is clicked (`youtube-nocookie.com`; the id is `DEMO_VIDEO_ID` in `landing/script.js`). The Docker and manual command blocks are copied from `README.md`: when those commands change, the landing page must change in the same ticket, and the other way round. No analytics, cookie banner, sign-in or API calls.
 
 ## UI/UX
 
