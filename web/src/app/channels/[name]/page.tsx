@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { ShareButton } from "@/components/ShareButton";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoCard } from "@/components/VideoCard";
 import { getChannelPage, getCurrentUser } from "@/lib/api-client";
@@ -56,6 +57,7 @@ export default async function ChannelPage({ params }: Props) {
         subscribers={result.subscribers}
         subscribed={result.subscribed === true}
       />
+      <ShareButton subject="channel" title={`${result.channel.name} on StreamSouk`} />
 
       {result.videos.length === 0 ? (
         <p>No public videos yet.</p>

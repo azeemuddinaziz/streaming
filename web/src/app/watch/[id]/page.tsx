@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cache } from "react";
 import { CommentSection } from "@/components/CommentSection";
 import { ReactionButtons } from "@/components/ReactionButtons";
+import { ShareButton } from "@/components/ShareButton";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
@@ -92,6 +93,9 @@ export default async function WatchPage({ params }: Props) {
           dislikes={video.dislikes}
           myReaction={video.myReaction}
         />
+      )}
+      {video.status === "READY" && (
+        <ShareButton subject="video" title={title} withStartTime privateVideo={video.visibility === "PRIVATE"} />
       )}
       {video.description && <p className="description">{video.description}</p>}
       {video.status === "READY" && !video.commentsEnabled && (

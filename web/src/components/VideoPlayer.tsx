@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { reportView } from "@/lib/api-client";
+import { parseStartTime, startPosition } from "@/lib/share-link";
 import { createViewTracker } from "@/lib/view-tracker";
 
 // Plays an HLS stream. Safari plays it natively; elsewhere hls.js feeds the
@@ -36,6 +37,21 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
       cancelled = true;
       stop();
     };
+  }, [src]);
+
+  // Opens at `?t=` (a Share link's start time), once, when the length is known.
+  // An invalid value, or one past the end, plays from the start.
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    const startAt = parseStartTime(window.location.search);
+    if (startAt === null) return;
+    const seek = () => {
+      const position = startPosition(startAt, element.duration);
+      if (position !== null) element.currentTime = position;
+    };
+    element.addEventListener("loadedmetadata", seek, { once: true });
+    return () => element.removeEventListener("loadedmetadata", seek);
   }, [src]);
 
   // Reports a View once playback has run long enough (see view-tracker).
