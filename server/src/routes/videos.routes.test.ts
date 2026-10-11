@@ -131,6 +131,7 @@ describe("studio list", () => {
     expect(all).toEqual([...all].sort().reverse());
     expect((await studioIds(ada, "?page=0")).page).toBe(1);
     expect((await studioIds(ada, "?page=abc")).page).toBe(1);
+    expect(await studioIds(ada, "?page=9007199254740991")).toMatchObject({ status: 200, hasMore: false, ids: [] });
   });
 
   it("filters by status with a matching total, and refuses an unknown status", async () => {

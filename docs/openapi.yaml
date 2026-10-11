@@ -438,7 +438,7 @@ paths:
           schema: { type: integer, minimum: 1, default: 1 }
         - name: status
           in: query
-          description: Only Videos in this processing status. Case-sensitive; any other value is 400.
+          description: Only Videos in this processing status. Case-sensitive; any other value, including an empty one or a repeated parameter, is 400.
           schema: { type: string, enum: [PROCESSING, READY, FAILED] }
       responses:
         "200":
