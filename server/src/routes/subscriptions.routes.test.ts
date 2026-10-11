@@ -174,6 +174,17 @@ describe("Subscription write limit", () => {
     expect(events.at(-1)).toMatchObject({ rateLimited: true });
   });
 
+  it("does not refuse a repeated subscribe to a Channel already subscribed to", async () => {
+    const grace = await person("Grace-Hopper");
+    for (let i = 0; i < 30; i++) await person(`Creator-${i}`);
+    for (let i = 0; i < 30; i++) await subscribe(`Creator-${i}`, grace);
+
+    const res = await subscribe("Creator-0", grace);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ subscribed: true, subscribers: 1 });
+  });
+
   it("does not count removals, nor another User's subscribes", async () => {
     const grace = await person("Grace-Hopper");
     const alan = await person("Alan-Turing");

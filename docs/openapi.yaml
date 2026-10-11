@@ -1210,7 +1210,8 @@ paths:
 
         Rate limit: at most 30 new Subscriptions per User per minute, counted from the
         Subscription table (separate from the Comment and Reaction limits). The 31st is 429 with a
-        `Retry-After` header (seconds). Checked last.
+        `Retry-After` header (seconds). Checked last, and only for a new Subscription: repeating one
+        the caller already holds is never refused.
       security: [{ cookieAuth: [] }, { bearerAuth: [] }]
       responses:
         "200":

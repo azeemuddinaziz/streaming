@@ -38,9 +38,12 @@ export const SubscriptionService = {
     if (ownerId === userId) throw new HttpError(409, "You cannot subscribe to your own channel.");
     const from = await SubscriptionRepository.exists(userId, channelId);
     enrich({ subscriptionFrom: from });
-    // Last, so a request that would fail anyway is told why, not to slow down.
-    await limitWriting(userId);
-    if (!from) await SubscriptionRepository.add(userId, channelId);
+    // Only a new Subscription counts, so repeating one is never refused. The
+    // limit comes last, so a request that would fail anyway is told why.
+    if (!from) {
+      await limitWriting(userId);
+      await SubscriptionRepository.add(userId, channelId);
+    }
     return { subscribed: true, subscribers: await SubscriptionRepository.count(channelId) };
   },
 
