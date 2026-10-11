@@ -136,4 +136,3 @@ describe("channel page paging", () => {
     }
   });
 });
-
