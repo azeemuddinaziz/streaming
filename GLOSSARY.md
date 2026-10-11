@@ -59,3 +59,15 @@ _Avoid_: Removed, banned, flagged
 **Comments off**:
 A setting on a Video, on by default, with which its owner stops new Comments and edits on it and hides the existing ones from everyone but the owner. Nothing is lost: turning Comments back on restores them.
 _Avoid_: Disabled comments, locked
+
+**Reaction**:
+A signed-in User's single stance on a Video or on a Comment, either a Like or a Dislike. A User has at most one Reaction per target: choosing the other kind replaces it, and choosing the same kind again removes it. Anonymous Viewers cannot react. Anyone, including the owner, can react to a Video or Comment they are allowed to see, as long as the Video is ready and Comments are on. Reactions are kept when a Video or Comment is hidden, deleted or has Comments off, and shown again if it comes back.
+_Avoid_: Vote, rating, score
+
+**Like**:
+The positive kind of Reaction. The number of Likes on a Video or Comment is public.
+_Avoid_: Upvote, thumbs-up
+
+**Dislike**:
+The negative kind of Reaction. The number of Dislikes is visible only to the owner of the Video it is on (including on that Video's Comments), never to other Viewers. Each User still sees their own Reaction.
+_Avoid_: Downvote, thumbs-down

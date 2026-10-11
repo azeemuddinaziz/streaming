@@ -120,6 +120,8 @@ components:
         status: { $ref: "#/components/schemas/Status" }
         visibility: { $ref: "#/components/schemas/Visibility" }
         commentsEnabled: { type: boolean, description: "Comments are on for this Video." }
+        likes: { type: integer, description: "Likes on the Video." }
+        dislikes: { type: integer, description: "Dislikes on the Video (the owner's list, so always present)." }
         createdAt: { type: string, format: date-time }
         thumbnailPath:
           type: string
@@ -133,8 +135,17 @@ components:
         status: READY
         visibility: PRIVATE
         commentsEnabled: true
+        likes: 0
+        dislikes: 0
         createdAt: "2026-10-01T09:30:00.000Z"
         thumbnailPath: /api/v1/media/eyJhbGciOi.../videos/7d3c0b9e/thumbnail.jpg
+    ReactionState:
+      type: object
+      properties:
+        likes: { type: integer }
+        dislikes: { type: integer, description: Only present for the Video's owner. }
+        myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE] }
+      example: { likes: 4, myReaction: LIKE }
     ShowcaseVideo:
       type: object
       properties:
@@ -606,6 +617,9 @@ paths:
                       comments: { type: integer, description: "The Comments and Replies anyone sees together; deleted and hidden ones (and Replies under a hidden Comment) are left out. Absent while Comments are off, except for the owner." }
                       commentsEnabled: { type: boolean, description: "False while the owner has Comments off." }
                       isOwner: { type: boolean, description: "The caller owns the Video, so can hide its Comments." }
+                      likes: { type: integer, description: "The Like count, public." }
+                      myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE], description: "The caller's own Reaction; null when signed out or none." }
+                      dislikes: { type: integer, description: "The Dislike count. Only present for the Video's owner." }
                       playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }
               example:
                 video:
@@ -619,6 +633,8 @@ paths:
                   comments: 3
                   commentsEnabled: true
                   isOwner: false
+                  likes: 4
+                  myReaction: null
                   playlistPath: /api/v1/media/eyJhbGciOi.../master.m3u8
         "404": { $ref: "#/components/responses/NotFound" }
   /videos/{id}/views:
@@ -737,6 +753,85 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: That comment can no longer be answered. }
+  /videos/{id}/reaction:
+    parameters:
+      - { $ref: "#/components/parameters/VideoId" }
+    put:
+      tags: [Watching]
+      summary: Like or Dislike a Video
+      description: |
+        Signed in only. Sets the caller's Reaction, replacing the one they had; repeating the same
+        kind changes nothing. A User has at most one Reaction per Video, and the owner may react to
+        their own Video. A missing or deleted Video, or a PRIVATE one to anyone but its owner, is
+        404; a Video that is not READY is 409. The web client removes a Reaction by sending
+        DELETE when the active button is pressed again.
+
+        Rate limit: at most 30 Reaction changes per User per minute, across all Videos, counted
+        from the Reaction table (separate from the Comment limit). The 31st is 429 with a
+        `Retry-After` header (seconds). Checked last.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [LIKE, DISLIKE] }
+            example: { kind: LIKE }
+      responses:
+        "200":
+          description: The counts the caller may see, and their Reaction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReactionState" }
+        "400":
+          description: The kind is missing or not LIKE or DISLIKE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: A reaction is LIKE or DISLIKE. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: This video is not ready for reactions. }
+        "429":
+          description: Thirty Reaction changes already made in the last minute.
+          headers:
+            Retry-After:
+              description: Seconds until another may be made.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: You are reacting too fast. Slow down and try again shortly. }
+    delete:
+      tags: [Watching]
+      summary: Remove your Reaction
+      description: |
+        Signed in only. Removes the caller's Reaction (the row is deleted); having none still
+        succeeds and changes nothing. Same Video rules as setting one. Removing is not counted by
+        the rate limit, which counts the Reactions that exist.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: "The counts the caller may see, and a null `myReaction`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReactionState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The Video is not READY.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: This video is not ready for reactions. }
   /videos/{id}/comments/hidden:
     parameters:
       - { $ref: "#/components/parameters/VideoId" }

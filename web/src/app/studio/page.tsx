@@ -58,6 +58,12 @@ export default async function StudioPage() {
               <span className="hint">
                 {STATUS_LABEL[video.status]} · {VISIBILITY_LABEL[video.visibility]}
               </span>
+              {video.status === "READY" && (
+                <span className="hint">
+                  {video.likes.toLocaleString("en")} {video.likes === 1 ? "like" : "likes"} ·{" "}
+                  {video.dislikes.toLocaleString("en")} {video.dislikes === 1 ? "dislike" : "dislikes"}
+                </span>
+              )}
               {video.status === "READY" && <Link href={`/watch/${video.id}`}>Watch</Link>}
               {video.status === "FAILED" && <RetryButton videoId={video.id} />}
               <DeleteVideoButton videoId={video.id} label={video.label} />

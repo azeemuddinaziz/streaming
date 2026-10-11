@@ -442,3 +442,15 @@ progress {
   color: var(--color-ink);
   font-size: 0.75rem;
 }
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reactions .button[aria-pressed="true"] {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}

@@ -12,6 +12,7 @@ import {
   setCommentHidden,
   getReplies,
   postComment,
+  reactToVideo,
   getCurrentUser,
   getPublicVideos,
   getStudioVideos,
@@ -532,5 +533,47 @@ describe("postComment over the rate limit", () => {
     const result = await postComment("v1", { body: "hi" }, baseUrl);
     expect(result).toMatchObject({ ok: false });
     expect(result.ok === false && result.message).toMatch(/12 seconds/);
+  });
+});
+
+describe("reactToVideo", () => {
+  it("sets with PUT, removes with DELETE and returns the state", async () => {
+    const seen: string[] = [];
+    stub = createServer((req, res) => {
+      let raw = "";
+      req.on("data", (chunk) => (raw += chunk));
+      req.on("end", () => {
+        seen.push(`${req.method} ${req.url} ${raw}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ likes: 1, myReaction: req.method === "PUT" ? "LIKE" : null }));
+      });
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await reactToVideo("v1", "LIKE", baseUrl)).toEqual({
+      ok: true,
+      state: { likes: 1, myReaction: "LIKE" },
+    });
+    expect(await reactToVideo("v1", null, baseUrl)).toEqual({
+      ok: true,
+      state: { likes: 1, myReaction: null },
+    });
+    expect(seen).toEqual([
+      'PUT /api/v1/videos/v1/reaction {"kind":"LIKE"}',
+      "DELETE /api/v1/videos/v1/reaction ",
+    ]);
+  });
+
+  it("tells the person how long to wait when over the limit", async () => {
+    stub = createServer((_req, res) => {
+      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "7" });
+      res.end(JSON.stringify({ msg: "too fast" }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    const result = await reactToVideo("v1", "DISLIKE", baseUrl);
+    expect(result.ok === false && result.message).toMatch(/7 seconds/);
   });
 });
