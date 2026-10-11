@@ -153,8 +153,41 @@ async function getOwnList<T>(
   }
 }
 
-export function getStudioVideos(cookie: string, baseUrl: string = getApiBaseUrl()) {
-  return getOwnList<StudioVideo>("videos/mine", "videos", cookie, baseUrl);
+export type StudioPage = {
+  videos: StudioVideo[];
+  page: number;
+  hasMore: boolean;
+  // How many Videos match the filter, across all pages.
+  total: number;
+};
+
+export type StudioPageResult =
+  | ({ ok: true } & StudioPage)
+  | { ok: false; reason: "signed-out" | "unavailable" };
+
+// For server components: one numbered page of the person's Videos, optionally
+// only those in one processing status.
+export async function getStudioPage(
+  cookie: string,
+  query: { page: number; status?: StudioVideo["status"] },
+  baseUrl: string = getApiBaseUrl(),
+): Promise<StudioPageResult> {
+  const params = new URLSearchParams({ page: String(query.page) });
+  if (query.status) params.set("status", query.status);
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/mine?${params}`, {
+      headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 401) return { ok: false, reason: "signed-out" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    const { videos, page, hasMore, total } = await response.json();
+    return { ok: true, videos, page, hasMore, total };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
 }
 
 export function getUnfinishedUploads(cookie: string, baseUrl: string = getApiBaseUrl()) {
