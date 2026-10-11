@@ -668,6 +668,8 @@ paths:
                       likes: { type: integer, description: "The Like count, public." }
                       myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE], description: "The caller's own Reaction; null when signed out or none." }
                       dislikes: { type: integer, description: "The Dislike count. Only present for the Video's owner." }
+                      label: { type: string, description: "Only for the Video's owner: the title, else the Upload's filename (as in the studio list). The Edit details page shows it." }
+                      thumbnailPath: { type: string, nullable: true, description: "Only for the Video's owner: the Thumbnail's media address, null until the Video is ready." }
                       subscribers: { type: integer, description: "The Channel's Subscriber count, public." }
                       subscribed: { type: boolean, nullable: true, description: "Whether the caller subscribes to the Channel; null when signed out, false for the owner." }
                       playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }

@@ -88,6 +88,14 @@ export const VideoService = {
       myReaction,
       // The Dislike count is the owner's alone (GLOSSARY, Dislike).
       ...(isOwner ? { dislikes } : {}),
+      // What the owner's Edit details page shows: the studio list's label and
+      // the Thumbnail's address (null until the Video is ready).
+      ...(isOwner
+        ? {
+            label: video.title ?? video.upload?.filename ?? "Untitled",
+            thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
+          }
+        : {}),
       // The Comments and Replies anyone sees; hidden and deleted ones are left
       // out. While Comments are off only the owner is told (or sees any).
       ...(video.commentsEnabled || isOwner ? { comments: video._count.comments } : {}),

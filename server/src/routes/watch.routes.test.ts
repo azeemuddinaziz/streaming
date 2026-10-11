@@ -125,6 +125,23 @@ describe("watching a Video", () => {
 
     expect(watched.status).toBe("FAILED");
   });
+
+  it("gives the owner alone the label and Thumbnail address the Edit details page needs", async () => {
+    const ada = await person("Ada-Lovelace");
+    const grace = await person("Grace-Hopper");
+    const id = await video(ada);
+
+    const get = async (headers?: Record<string, string>) =>
+      (await (await api.request(`/videos/${id}/watch`, { headers })).json()).video;
+    const owned = await get(ada.bearer);
+
+    expect(owned.label).toBe("Holiday");
+    expect(owned.thumbnailPath).toMatch(new RegExp(`^/api/v1/media/.+/thumbnail\\.jpg$`));
+    for (const other of [await get(), await get(grace.bearer)]) {
+      expect(other.label).toBeUndefined();
+      expect(other.thumbnailPath).toBeUndefined();
+    }
+  });
 });
 
 describe("signed media addresses", () => {
