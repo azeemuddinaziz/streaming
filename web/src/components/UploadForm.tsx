@@ -11,6 +11,7 @@ import {
   XIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useReducer, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { toast } from "sonner";
 import { Upload } from "tus-js-client";
@@ -51,7 +52,9 @@ const FAILURE_MESSAGE: Record<FailureKind, string> = {
 // One video at a time, straight to the tus server. Pause, resume and cancel act
 // on the tus upload; the state machine is in `lib/upload-state.ts`.
 export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[] }) {
+  const router = useRouter();
   const [state, dispatch] = useReducer(uploadReducer, initialUploadState);
+  const [, tick] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const fileRef = useRef<File | null>(null);
@@ -59,6 +62,8 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
   const inputRef = useRef<HTMLInputElement>(null);
   // Set while the stored fingerprint is looked up, so a double click starts one upload.
   const starting = useRef(false);
+  // The abort of a pause, which a resume waits for so the two do not overlap.
+  const pausing = useRef<Promise<void>>(Promise.resolve());
 
   const active = state.phase === "uploading" || state.phase === "paused";
 
@@ -69,6 +74,32 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [active]);
+
+  // The time left is worth redrawing each second even when no progress arrives.
+  useEffect(() => {
+    if (state.phase !== "uploading") return;
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [state.phase]);
+
+  // A file dropped outside the zone would make the browser open it and leave the page.
+  useEffect(() => {
+    const stop = (event: Event) => event.preventDefault();
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
+  }, []);
+
+  // Navigating away inside the app stops the sending but keeps it resumable.
+  useEffect(
+    () => () => {
+      void uploadRef.current?.abort();
+    },
+    [],
+  );
 
   function choose(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -90,7 +121,6 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
   function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragging(false);
-    if (active) return;
     choose(event.dataTransfer.files);
   }
 
@@ -114,7 +144,10 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
         if (uploadRef.current === upload) dispatch({ type: "progress", sent, total, now: Date.now() });
       },
       onSuccess() {
-        if (uploadRef.current === upload) dispatch({ type: "success" });
+        if (uploadRef.current !== upload) return;
+        dispatch({ type: "success" });
+        // The Upload is finished, so it leaves the unfinished list.
+        router.refresh();
       },
       onError(error) {
         if (uploadRef.current !== upload) return;
@@ -143,13 +176,16 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
   }
 
   function pause() {
-    void uploadRef.current?.abort();
+    const upload = uploadRef.current;
+    if (upload) pausing.current = Promise.resolve(upload.abort()).catch(() => {});
     dispatch({ type: "pause" });
   }
 
-  function resume() {
+  async function resume() {
+    const upload = uploadRef.current;
     dispatch({ type: "resume", now: Date.now() });
-    uploadRef.current?.start();
+    await pausing.current;
+    if (uploadRef.current === upload) upload?.start();
   }
 
   function cancel() {
@@ -161,6 +197,7 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
     dispatch({ type: "cancel" });
     setConfirmCancel(false);
     toast("Upload cancelled");
+    router.refresh();
   }
 
   function chooseAnother() {
@@ -253,7 +290,7 @@ export function UploadForm({ unfinishedNames = [] }: { unfinishedNames?: string[
               </Button>
             )}
             {state.phase === "paused" && (
-              <Button type="button" onClick={resume}>
+              <Button type="button" onClick={() => void resume()}>
                 <PlayIcon aria-hidden="true" />
                 Resume
               </Button>
@@ -361,12 +398,13 @@ function ReadyFile({
       <FileLine file={file} />
       {resumable && (
         <p className="text-sm text-muted-foreground">
-          This file has an unfinished upload. It carries on where it stopped.
+          A file with this name has an unfinished upload. If it is the same file, it carries on where it
+          stopped.
         </p>
       )}
       <div className="flex flex-wrap justify-center gap-2">
         <Button type="button" onClick={onStart}>
-          {resumable ? "Resume upload" : "Start upload"}
+          Start upload
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Choose a different file

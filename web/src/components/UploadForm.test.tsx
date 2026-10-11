@@ -29,6 +29,7 @@ const { created, FakeUpload } = vi.hoisted(() => {
 });
 
 vi.mock("tus-js-client", () => ({ Upload: FakeUpload }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: vi.fn() }));
 
 import { UploadForm } from "./UploadForm";

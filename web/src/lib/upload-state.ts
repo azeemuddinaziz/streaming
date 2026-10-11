@@ -26,7 +26,9 @@ export function classifyUploadError(status: number | null): FailureKind {
   return "network";
 }
 
-type Progress = { sent: number; total: number; resumed: boolean; startedAt: number; startSent: number };
+// `startSent` is null until the first progress of a run arrives: a resumed upload
+// reports where it carries on from, and that offset must not count as speed.
+type Progress = { sent: number; total: number; resumed: boolean; startedAt: number; startSent: number | null };
 
 export type UploadState =
   | { phase: "idle"; problem?: string }
@@ -71,27 +73,31 @@ export function uploadReducer(state: UploadState, event: UploadEvent): UploadSta
           total: file.size,
           resumed: event.resumed,
           startedAt: event.now,
-          startSent: 0,
+          startSent: null,
         };
       }
       if (state.phase === "failed") {
         const { phase: _phase, kind: _kind, ...rest } = state;
-        return { ...rest, phase: "uploading", resumed: event.resumed, startedAt: event.now, startSent: state.sent };
+        return { ...rest, phase: "uploading", resumed: event.resumed, startedAt: event.now, startSent: null };
       }
       return state;
     }
     case "progress":
       // Late progress after a pause or cancel is dropped.
       if (state.phase !== "uploading") return state;
+      if (state.startSent === null) {
+        return { ...state, sent: event.sent, total: event.total, startedAt: event.now, startSent: event.sent };
+      }
       return { ...state, sent: event.sent, total: event.total };
     case "pause":
       return state.phase === "uploading" ? { ...state, phase: "paused" } : state;
     case "resume":
       return state.phase === "paused"
-        ? { ...state, phase: "uploading", startedAt: event.now, startSent: state.sent }
+        ? { ...state, phase: "uploading", startedAt: event.now, startSent: null }
         : state;
     case "success":
-      return state.phase === "uploading" ? { phase: "done", file: state.file } : state;
+      // A pause that lands as the last byte goes still finishes.
+      return state.phase === "uploading" || state.phase === "paused" ? { phase: "done", file: state.file } : state;
     case "error":
       return state.phase === "uploading" ? { ...state, phase: "failed", kind: event.kind } : state;
     case "cancel":
@@ -106,6 +112,7 @@ export function remainingSeconds(
   progress: Pick<Progress, "sent" | "total" | "startedAt" | "startSent">,
   now: number,
 ): number | null {
+  if (progress.startSent === null) return null;
   const elapsed = (now - progress.startedAt) / 1000;
   const moved = progress.sent - progress.startSent;
   if (elapsed < 2 || moved <= 0) return null;

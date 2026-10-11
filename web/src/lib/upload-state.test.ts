@@ -60,7 +60,22 @@ describe("uploadReducer", () => {
     expect(state).toMatchObject({ phase: "paused", sent: 5_000 });
 
     state = run([{ type: "resume", now: 9000 }], state);
-    expect(state).toMatchObject({ phase: "uploading", sent: 5_000, startedAt: 9000, startSent: 5_000 });
+    expect(state).toMatchObject({ phase: "uploading", sent: 5_000, startedAt: 9000, startSent: null });
+
+    // The first progress after resuming sets the baseline, so the offset is not read as speed.
+    state = run([{ type: "progress", sent: 5_000, total: 10_000, now: 9100 }], state);
+    expect(state).toMatchObject({ startedAt: 9100, startSent: 5_000 });
+    expect(remainingSeconds(state as never, 9100)).toBeNull();
+  });
+
+  it("still finishes when the last byte lands during a pause", () => {
+    const state = run([
+      { type: "choose", file },
+      { type: "start", resumed: false, now: 0 },
+      { type: "pause" },
+      { type: "success" },
+    ]);
+    expect(state).toMatchObject({ phase: "done", file });
   });
 
   it("ignores progress that arrives after a pause", () => {
@@ -83,7 +98,7 @@ describe("uploadReducer", () => {
     expect(state).toMatchObject({ phase: "failed", kind: "network", sent: 2_000 });
 
     state = run([{ type: "start", resumed: true, now: 5000 }], state);
-    expect(state).toMatchObject({ phase: "uploading", resumed: true, sent: 2_000, startedAt: 5000 });
+    expect(state).toMatchObject({ phase: "uploading", resumed: true, sent: 2_000, startedAt: 5000, startSent: null });
   });
 
   it("goes back to choosing a file on cancel or reset", () => {
@@ -122,6 +137,10 @@ describe("remainingSeconds", () => {
 
   it("estimates from the speed of this run", () => {
     expect(remainingSeconds({ ...base, sent: 2_500 }, 5_000)).toBe(15);
+  });
+
+  it("is unknown until a baseline is taken", () => {
+    expect(remainingSeconds({ ...base, startSent: null, sent: 5_000 }, 9_000)).toBeNull();
   });
 
   it("is unknown before there is enough to measure", () => {
