@@ -1,6 +1,21 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { VIDEO_GRID_CLASS } from "@/lib/video-grid";
 
 // Shared loading pieces, each mirroring the layout it stands in for.
+
+// Mirrors the Channel page's header: the name, with the count and controls beside it from sm.
+export function ChannelHeaderSkeleton() {
+  return (
+    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" aria-hidden="true">
+      <Skeleton className="h-12 w-2/3 max-w-md" />
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-5 w-28" />
+        <Skeleton className="h-9 w-28" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+    </div>
+  );
+}
 
 export function PageTitleSkeleton() {
   return <Skeleton className="mb-8 h-12 w-2/3 max-w-md" />;
@@ -17,10 +32,10 @@ export function VideoCardSkeleton() {
   );
 }
 
-// The grid of VideoCards in the .channel-grid.
+// The grid of VideoCards.
 export function VideoGridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <ul className="channel-grid" aria-hidden="true">
+    <ul className={VIDEO_GRID_CLASS} aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
         <VideoCardSkeleton key={i} />
       ))}

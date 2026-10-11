@@ -4,6 +4,7 @@ import { VideoCard } from "@/components/VideoCard";
 import { InfiniteList } from "@/components/InfiniteList";
 import { VideoCardSkeleton } from "@/components/skeletons";
 import { getPublicVideos, type ShowcaseVideo } from "@/lib/api-client";
+import { VIDEO_GRID_CLASS } from "@/lib/video-grid";
 
 const NOUN = { singular: "video", plural: "videos" };
 
@@ -41,7 +42,7 @@ export function HomeShowcase({ videos, hasMore }: { videos: ShowcaseVideo[]; has
       ))}
       noun={NOUN}
       label="Public videos"
-      className="channel-grid"
+      className={VIDEO_GRID_CLASS}
     />
   );
 }

@@ -5,6 +5,7 @@ import {
   checkApiHealth,
   deleteVideo,
   getChannelPage,
+  getChannelVideos,
   deleteComment,
   editComment,
   getComments,
@@ -400,6 +401,24 @@ describe("getChannelPage", () => {
     expect(await getChannelPage("x", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getChannelPage("x", "", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("getChannelVideos", () => {
+  it("asks for the page and returns its Videos, or not ok", async () => {
+    const body = { channel: { name: "Ada" }, videos: [{ id: "v" }], page: 2, hasMore: true, subscribers: 1 };
+    const { baseUrl, requests } = await startRecordingApi(200, body);
+
+    expect(await getChannelVideos("Ada Lovelace", 2, baseUrl)).toEqual({
+      ok: true,
+      videos: [{ id: "v" }],
+      page: 2,
+      hasMore: true,
+    });
+    expect(requests[0]!.url).toBe("/api/v1/channels/Ada%20Lovelace?page=2");
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getChannelVideos("x", 2, await startStubApi(404))).toEqual({ ok: false });
   });
 });
 

@@ -449,14 +449,19 @@ export type ChannelPage = {
   subscribers: number;
   // Whether the signed-in person subscribes; null when signed out.
   subscribed: boolean | null;
-  videos: { id: string; title: string | null; createdAt: string; thumbnailPath: string | null }[];
+  videos: ChannelVideo[];
+  page: number;
+  hasMore: boolean;
 };
+
+export type ChannelVideo = { id: string; title: string | null; createdAt: string; thumbnailPath: string | null };
 
 export type ChannelResult =
   | ({ ok: true } & ChannelPage)
   | { ok: false; reason: "not-found" | "unavailable" };
 
-// For server components: loads a Channel's public page, found by account name.
+// For server components: loads a Channel's public page (the first page of its
+// Videos), found by account name.
 // The cookie tells the API who is asking, for `subscribed`.
 export async function getChannelPage(
   name: string,
@@ -475,6 +480,30 @@ export async function getChannelPage(
     return { ok: true, ...(await response.json()) };
   } catch {
     return { ok: false, reason: "unavailable" };
+  }
+}
+
+export type ChannelVideosResult =
+  | { ok: true; videos: ChannelVideo[]; page: number; hasMore: boolean }
+  | { ok: false };
+
+// For the browser: a later page of a Channel's public Videos, for the infinite list.
+export async function getChannelVideos(
+  name: string,
+  page: number,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<ChannelVideosResult> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(name)}?page=${page}`, {
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false };
+
+    const body = await response.json();
+    if (!Array.isArray(body.videos)) return { ok: false };
+    return { ok: true, videos: body.videos, page: body.page, hasMore: body.hasMore };
+  } catch {
+    return { ok: false };
   }
 }
 
