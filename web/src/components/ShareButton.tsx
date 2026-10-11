@@ -25,8 +25,7 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
   const [canShare, setCanShare] = useState(false);
   const [position, setPosition] = useState(0);
   const [useStart, setUseStart] = useState(false);
-  const [origin, setOrigin] = useState("");
-  const [path, setPath] = useState("");
+  const [base, setBase] = useState("");
   const [status, setStatus] = useState<string>();
 
   // Decided after mount so server and browser markup agree.
@@ -34,10 +33,21 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
     setCanShare(typeof navigator.share === "function");
   }, []);
 
+  // Escape closes the popover wherever focus is, and focus goes back to the button.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   function toggle() {
-    if (open) return close(false);
-    setOrigin(window.location.origin);
-    setPath(window.location.pathname);
+    if (open) return setOpen(false);
+    setBase(window.location.origin + window.location.pathname);
     const player = withStartTime ? document.querySelector<HTMLVideoElement>("video.player") : null;
     setPosition(Math.floor(player?.currentTime ?? 0));
     setUseStart(false);
@@ -45,12 +55,7 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
     setOpen(true);
   }
 
-  function close(returnFocus: boolean) {
-    setOpen(false);
-    if (returnFocus) trigger.current?.focus();
-  }
-
-  const link = buildShareLink(origin, path, withStartTime && useStart ? position : undefined);
+  const link = buildShareLink(base, "", withStartTime && useStart ? position : undefined);
 
   async function copy() {
     field.current?.select();
@@ -72,15 +77,7 @@ export function ShareButton({ withStartTime = false, privateVideo = false, subje
   }
 
   return (
-    <div
-      className="share"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && open) {
-          event.stopPropagation();
-          close(true);
-        }
-      }}
-    >
+    <div className="share">
       <button
         ref={trigger}
         className="button button-secondary"
