@@ -10,7 +10,8 @@ export type PagedList<T> = {
   hasMore: boolean;
 };
 
-export type PageOfItems<T> = { items: T[]; page: number; hasMore: boolean };
+// A page as it arrives from the API has the same shape.
+export type PageOfItems<T> = PagedList<T>;
 
 // Offsets shift when something is published between loads, so a later page can
 // repeat an item already shown. The first copy wins and keeps its place.
@@ -78,10 +79,22 @@ export function loadSnapshot<T>(
   }
 }
 
-export function clearSnapshot(storage: SnapshotStorage, key: string): void {
-  try {
-    storage.removeItem(PREFIX + key);
-  } catch {
-    // Nothing to do.
-  }
+// How long after a Back/Forward the next list to mount still counts as arriving
+// by it: long enough for the page to be fetched, short enough that a later link
+// click is not mistaken for it.
+export const HISTORY_WINDOW_MS = 5000;
+
+// Whether a list that is mounting should bring back its saved pages: only when
+// the person got here by Back/Forward. `poppedAt` is when the last popstate
+// fired (null if none); `loadedByHistory` is the document's own navigation type
+// being back_forward, which only describes the first list shown after the load.
+export function arrivedByHistory(input: {
+  poppedAt: number | null;
+  now: number;
+  loadedByHistory: boolean;
+  firstListOfDocument: boolean;
+}): boolean {
+  const { poppedAt, now, loadedByHistory, firstListOfDocument } = input;
+  if (poppedAt !== null && now - poppedAt <= HISTORY_WINDOW_MS) return true;
+  return loadedByHistory && firstListOfDocument;
 }

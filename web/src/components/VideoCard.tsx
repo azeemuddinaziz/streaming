@@ -31,7 +31,7 @@ export function VideoCard({
             />
           )}
         </span>
-        <strong className="line-clamp-2 font-medium group-hover:text-primary group-focus-within:text-primary">
+        <strong className="line-clamp-2 font-medium group-hover:text-primary">
           {video.title ?? "Untitled video"}
         </strong>
       </Link>

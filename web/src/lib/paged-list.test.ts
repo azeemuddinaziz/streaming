@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   appendPage,
+  arrivedByHistory,
+  HISTORY_WINDOW_MS,
   batchMessage,
-  clearSnapshot,
   loadSnapshot,
   saveSnapshot,
   type SnapshotStorage,
@@ -134,13 +135,23 @@ describe("snapshots", () => {
     };
     expect(() => saveSnapshot(broken, "home", { items: [], page: 1, hasMore: false, scrollY: 0 })).not.toThrow();
     expect(loadSnapshot(broken, "home", isItem)).toBeNull();
-    expect(() => clearSnapshot(broken, "home")).not.toThrow();
   });
+});
 
-  it("clears a snapshot", () => {
-    const storage = memoryStorage();
-    saveSnapshot(storage, "home", { items: [], page: 1, hasMore: false, scrollY: 0 });
-    clearSnapshot(storage, "home");
-    expect(loadSnapshot(storage, "home", isItem)).toBeNull();
+describe("arrivedByHistory", () => {
+  const base = { poppedAt: null, now: 100_000, loadedByHistory: false, firstListOfDocument: true };
+
+  it("is false for a plain link click", () => {
+    expect(arrivedByHistory(base)).toBe(false);
+  });
+  it("is true just after a popstate", () => {
+    expect(arrivedByHistory({ ...base, poppedAt: 100_000 - 500 })).toBe(true);
+  });
+  it("is false when the popstate was long ago", () => {
+    expect(arrivedByHistory({ ...base, poppedAt: 100_000 - HISTORY_WINDOW_MS - 1 })).toBe(false);
+  });
+  it("trusts a back_forward document load only for its first list", () => {
+    expect(arrivedByHistory({ ...base, loadedByHistory: true })).toBe(true);
+    expect(arrivedByHistory({ ...base, loadedByHistory: true, firstListOfDocument: false })).toBe(false);
   });
 });

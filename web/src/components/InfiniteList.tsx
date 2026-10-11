@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   appendPage,
+  arrivedByHistory,
   batchMessage,
   loadSnapshot,
   saveSnapshot,
@@ -15,26 +16,27 @@ import {
 // Layout effects warn during server rendering; the restore must run before paint.
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-// Set by the browser's Back and Forward buttons (and cleared when a list takes
-// it), so a list restores its pages only when the person is going back, not when
-// they follow a link to it.
-let poppedSinceLastList = false;
+// When the browser last went Back or Forward, and whether a list has mounted
+// since the document loaded; see arrivedByHistory.
+let poppedAt: number | null = null;
+let listMountedInDocument = false;
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
-    poppedSinceLastList = true;
+    poppedAt = Date.now();
   });
 }
 
-function arrivedByHistory(): boolean {
-  const popped = poppedSinceLastList;
-  poppedSinceLastList = false;
-  if (popped) return true;
+function mountedByHistory(): boolean {
+  const first = !listMountedInDocument;
+  listMountedInDocument = true;
+  let loadedByHistory = false;
   try {
     const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
-    return entry?.type === "back_forward";
+    loadedByHistory = entry?.type === "back_forward";
   } catch {
-    return false;
+    // No Navigation Timing: only popstate can say.
   }
+  return arrivedByHistory({ poppedAt, now: Date.now(), loadedByHistory, firstListOfDocument: first });
 }
 
 export type LoadPageResult<T> = ({ ok: true } & PageOfItems<T>) | { ok: false };
@@ -75,7 +77,7 @@ export function InfiniteList<T>({
   const [list, setList] = useState<PagedList<T>>(initial);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState({ text: "", batch: 0 });
   const [canObserve, setCanObserve] = useState(false);
 
   const sentinel = useRef<HTMLDivElement>(null);
@@ -83,13 +85,14 @@ export function InfiniteList<T>({
   const scrollY = useRef(0);
   // The restored list, and where to scroll once exactly that list has rendered.
   const pendingRestore = useRef<{ list: PagedList<T>; y: number } | null>(null);
+  const touched = useRef(false);
   const listRef = useRef(list);
   listRef.current = list;
 
   // Back: bring back the pages loaded before leaving, then the scroll position
   // once they have rendered.
   useIsomorphicLayoutEffect(() => {
-    if (!arrivedByHistory()) return;
+    if (!mountedByHistory()) return;
     const snapshot = loadSnapshot(window.sessionStorage, listKey, isItem);
     if (snapshot === null) return;
 
@@ -109,12 +112,17 @@ export function InfiniteList<T>({
 
   // Keep the pages and the scroll position for a later Back.
   useEffect(() => {
-    const save = () =>
+    // Nothing has changed until the list differs from the server's page or the
+    // person scrolls; saving earlier would overwrite a snapshot not yet restored.
+    const save = () => {
+      if (!touched.current && listRef.current === initial) return;
       saveSnapshot(window.sessionStorage, listKey, { ...listRef.current, scrollY: scrollY.current });
+    };
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onScroll = () => {
       scrollY.current = window.scrollY;
+      touched.current = true;
       clearTimeout(timer);
       timer = setTimeout(save, 150);
     };
@@ -129,7 +137,9 @@ export function InfiniteList<T>({
   }, [listKey]);
 
   useEffect(() => {
+    if (list === initial) return;
     saveSnapshot(window.sessionStorage, listKey, { ...list, scrollY: scrollY.current });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey, list]);
 
   const loadMore = useCallback(async () => {
@@ -148,7 +158,7 @@ export function InfiniteList<T>({
     }
     const { list: next, added } = appendPage(listRef.current, result, getId);
     setList(next);
-    setAnnouncement(batchMessage(added, noun));
+    setAnnouncement((previous) => ({ text: batchMessage(added, noun), batch: previous.batch + 1 }));
   }, [loadPage, getId, noun]);
 
   useEffect(() => {
@@ -179,7 +189,10 @@ export function InfiniteList<T>({
       </ul>
 
       <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
+        {/* Every second batch ends in a non-breaking space, so identical
+            messages still change the text and are announced again. */}
+        {announcement.text}
+        {announcement.batch % 2 === 0 ? "" : "\u00a0"}
       </p>
 
       <div ref={sentinel} className="flex flex-col items-center gap-3 pb-8">
