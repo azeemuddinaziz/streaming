@@ -13,16 +13,17 @@ datasource db {
 }
 
 model User {
-  id       String   @id @default(uuid())
-  email    String   @unique
+  id        String     @id @default(uuid())
+  email     String     @unique
   // The account name as the person typed it. Shown as-is and used to name their Channel.
-  name     String
+  name      String
   // Lowercased name, so account names are unique regardless of case.
-  nameKey  String   @unique
-  password String
-  channel  Channel?
-  uploads  Upload[]
-  comments Comment[]
+  nameKey   String     @unique
+  password  String
+  channel   Channel?
+  uploads   Upload[]
+  comments  Comment[]
+  reactions Reaction[]
 }
 
 model Channel {
@@ -46,29 +47,30 @@ enum Visibility {
 
 // A piece of content on a Channel, created only from a completed Upload.
 model Video {
-  id         String      @id @default(uuid())
-  channelId  String
-  channel    Channel     @relation(fields: [channelId], references: [id])
-  status     VideoStatus @default(PROCESSING)
-  visibility Visibility  @default(PRIVATE)
+  id                String      @id @default(uuid())
+  channelId         String
+  channel           Channel     @relation(fields: [channelId], references: [id])
+  status            VideoStatus @default(PROCESSING)
+  visibility        Visibility  @default(PRIVATE)
   // Set by the owner. Until then the Upload's filename is only a placeholder label.
-  title       String?
-  description String?
+  title             String?
+  description       String?
   // Set by the owner. While false, new Comments and edits are refused and only
   // the owner sees the existing ones; nothing is lost (GLOSSARY, Comments off).
-  commentsEnabled Boolean   @default(true)
-  createdAt  DateTime    @default(now())
+  commentsEnabled   Boolean     @default(true)
+  createdAt         DateTime    @default(now())
   // Set when the owner deletes the Video. Nothing is removed; every read path
   // must leave out a Video that has it (see ADR 0001).
-  deletedAt  DateTime?
+  deletedAt         DateTime?
   // The Upload this Video was made from, kept as a record of it.
-  upload     Upload?
+  upload            Upload?
   // Storage keys of what processing produced; null until the Video is ready.
   masterPlaylistKey String?
   thumbnailKey      String?
   renditions        Rendition[]
   views             View[]
   comments          Comment[]
+  reactions         Reaction[]
 
   @@index([channelId])
 }
@@ -148,4 +150,27 @@ model Comment {
   @@index([parentId, createdAt])
   // For the per-User rate limit, which counts an author's recent Comments.
   @@index([authorId, createdAt])
+}
+
+enum ReactionKind {
+  LIKE
+  DISLIKE
+}
+
+// A User's Like or Dislike of a Video: at most one per User and Video, replaced
+// or deleted as they change their mind (GLOSSARY, Reaction). `updatedAt` is what
+// the per-User write limit counts.
+model Reaction {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  videoId   String
+  video     Video        @relation(fields: [videoId], references: [id])
+  kind      ReactionKind
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([userId, videoId])
+  @@index([videoId, kind])
+  @@index([userId, updatedAt])
 }

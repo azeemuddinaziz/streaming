@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { cache } from "react";
 import { CommentSection } from "@/components/CommentSection";
+import { ReactionButtons } from "@/components/ReactionButtons";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
 
@@ -78,6 +79,15 @@ export default async function WatchPage({ params }: Props) {
         {" · "}
         {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
+      {video.status === "READY" && (
+        <ReactionButtons
+          videoId={video.id}
+          signedIn={signedIn}
+          likes={video.likes}
+          dislikes={video.dislikes}
+          myReaction={video.myReaction}
+        />
+      )}
       {video.description && <p className="description">{video.description}</p>}
       {video.status === "READY" && !video.commentsEnabled && (
         <p className="notice" role="status">

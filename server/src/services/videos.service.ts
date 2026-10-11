@@ -8,6 +8,7 @@ import { enrich, errorType } from "../lib/wide-event.ts";
 import { createStorage } from "../lib/storage.ts";
 import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
+import { ReactionRepository } from "../repositories/reactions.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 
 const TITLE_MAX = 100;
@@ -65,6 +66,8 @@ export const VideoService = {
       throw new HttpError(404, "Video not found.");
     }
 
+    const { likes, dislikes } = (await ReactionRepository.countsFor([video.id])).get(video.id)!;
+    const myReaction = viewerId ? await ReactionRepository.find(viewerId, video.id) : null;
     const status = video.status === "FAILED" && !isOwner ? "PROCESSING" : video.status;
     const base = {
       id: video.id,
@@ -76,6 +79,10 @@ export const VideoService = {
       views: video._count.views,
       isOwner,
       commentsEnabled: video.commentsEnabled,
+      likes,
+      myReaction,
+      // The Dislike count is the owner's alone (GLOSSARY, Dislike).
+      ...(isOwner ? { dislikes } : {}),
       // The Comments and Replies anyone sees; hidden and deleted ones are left
       // out. While Comments are off only the owner is told (or sees any).
       ...(video.commentsEnabled || isOwner ? { comments: video._count.comments } : {}),
@@ -118,6 +125,7 @@ export const VideoService = {
   // A Video is labelled with its Upload's filename until it has a title.
   async listStudio(userId: string) {
     const videos = await VideoRepository.listForUser(userId);
+    const counts = await ReactionRepository.countsFor(videos.map((video) => video.id));
 
     return await Promise.all(videos.map(async (video) => ({
       id: video.id,
@@ -127,6 +135,7 @@ export const VideoService = {
       status: video.status,
       visibility: video.visibility,
       commentsEnabled: video.commentsEnabled,
+      ...counts.get(video.id)!,
       createdAt: video.createdAt,
       thumbnailPath: video.thumbnailKey ? await mediaPath(video.id, video.thumbnailKey) : null,
     })));

@@ -19,6 +19,8 @@ export type StudioVideo = {
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
   // The owner has Comments on for this Video.
   commentsEnabled: boolean;
+  likes: number;
+  dislikes: number;
   createdAt: string;
   // Where the Thumbnail is served on the API; null until the Video is ready.
   thumbnailPath: string | null;
@@ -205,6 +207,8 @@ export async function updateVideoDetails(
   }
 }
 
+export type ReactionKind = "LIKE" | "DISLIKE";
+
 export type WatchVideo = {
   id: string;
   title: string | null;
@@ -219,6 +223,11 @@ export type WatchVideo = {
   commentsEnabled: boolean;
   // The signed-in person owns this Video, so can moderate its Comments.
   isOwner: boolean;
+  likes: number;
+  // The signed-in person's own Reaction; null when signed out or none.
+  myReaction: ReactionKind | null;
+  // Only the owner is told how many Dislikes there are.
+  dislikes?: number;
   // Where the master playlist is served, on the API. Only for a ready Video.
   playlistPath?: string;
 };
@@ -263,6 +272,41 @@ export async function deleteVideo(
     if (response.ok) return { ok: true };
 
     const body = await response.json().catch(() => ({}));
+    return { ok: false, message: body.msg ?? "Something went wrong." };
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+}
+
+export type ReactionState = { likes: number; dislikes?: number; myReaction: ReactionKind | null };
+
+// Sets (`kind`) or removes (`null`) the signed-in person's Reaction to a Video.
+// Over the limit (429) the message says how long to wait. Called from the browser.
+export async function reactToVideo(
+  videoId: string,
+  kind: ReactionKind | null,
+  baseUrl: string = getApiBaseUrl(),
+): Promise<{ ok: true; state: ReactionState } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/${encodeURIComponent(videoId)}/reaction`, {
+      method: kind ? "PUT" : "DELETE",
+      credentials: "include",
+      ...(kind
+        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) }
+        : {}),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return { ok: true, state: body };
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get("Retry-After"));
+      return {
+        ok: false,
+        message:
+          Number.isFinite(seconds) && seconds > 0
+            ? `Slow down: you can react again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`
+            : "Slow down: you are reacting too fast.",
+      };
+    }
     return { ok: false, message: body.msg ?? "Something went wrong." };
   } catch {
     return { ok: false, message: UNREACHABLE };

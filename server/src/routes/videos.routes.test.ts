@@ -82,6 +82,8 @@ describe("studio list", () => {
           status: "PROCESSING",
           visibility: "PRIVATE",
           commentsEnabled: true,
+          likes: 0,
+          dislikes: 0,
           createdAt: expect.any(String),
           thumbnailPath: null,
         },
