@@ -13,24 +13,26 @@ datasource db {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
+  id            String         @id @default(uuid())
+  email         String         @unique
   // The account name as the person typed it. Shown as-is and used to name their Channel.
-  name      String
+  name          String
   // Lowercased name, so account names are unique regardless of case.
-  nameKey   String     @unique
-  password  String
-  channel   Channel?
-  uploads   Upload[]
-  comments  Comment[]
-  reactions Reaction[]
+  nameKey       String         @unique
+  password      String
+  channel       Channel?
+  uploads       Upload[]
+  comments      Comment[]
+  reactions     Reaction[]
+  subscriptions Subscription[]
 }
 
 model Channel {
-  id     String  @id @default(uuid())
-  userId String  @unique
-  user   User    @relation(fields: [userId], references: [id])
-  videos Video[]
+  id            String         @id @default(uuid())
+  userId        String         @unique
+  user          User           @relation(fields: [userId], references: [id])
+  videos        Video[]
+  subscriptions Subscription[]
 }
 
 enum VideoStatus {
@@ -132,16 +134,16 @@ model View {
 // for Replies hidden on their own. Reads go through the per-viewer filters in
 // CommentRepository; `editedAt` is set when the author changes the text.
 model Comment {
-  id        String    @id @default(uuid())
+  id        String     @id @default(uuid())
   videoId   String
-  video     Video     @relation(fields: [videoId], references: [id])
+  video     Video      @relation(fields: [videoId], references: [id])
   authorId  String
-  author    User      @relation(fields: [authorId], references: [id])
+  author    User       @relation(fields: [authorId], references: [id])
   parentId  String?
-  parent    Comment?  @relation("Replies", fields: [parentId], references: [id])
-  replies   Comment[] @relation("Replies")
+  parent    Comment?   @relation("Replies", fields: [parentId], references: [id])
+  replies   Comment[]  @relation("Replies")
   body      String
-  createdAt DateTime  @default(now())
+  createdAt DateTime   @default(now())
   editedAt  DateTime?
   deletedAt DateTime?
   hiddenAt  DateTime?
@@ -179,4 +181,21 @@ model Reaction {
   @@index([videoId, kind])
   @@index([commentId, kind])
   @@index([userId, updatedAt])
+}
+
+// A signed-in User's standing choice to subscribe to a Channel (GLOSSARY,
+// Subscription). Unsubscribing deletes the row: ADR 0001 is deliberately not
+// extended to it. Who subscribed is never returned by any endpoint; only the
+// count is public. `createdAt` is what the per-User write limit counts.
+model Subscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, channelId])
+  @@index([channelId])
+  @@index([userId, createdAt])
 }

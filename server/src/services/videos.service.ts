@@ -10,6 +10,7 @@ import { THUMBNAIL_DEFAULT, makeThumbnails } from "../lib/thumbnail.ts";
 import { queueVideoProcessing } from "../lib/video-queue.ts";
 import { ReactionRepository } from "../repositories/reactions.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
+import { SubscriptionService } from "./subscriptions.service.ts";
 
 const TITLE_MAX = 100;
 const DESCRIPTION_MAX = 5000;
@@ -78,6 +79,7 @@ export const VideoService = {
       createdAt: video.createdAt,
       views: video._count.views,
       isOwner,
+      ...(await SubscriptionService.stateFor(video.channel.id, viewerId)),
       commentsEnabled: video.commentsEnabled,
       likes,
       myReaction,

@@ -24,6 +24,7 @@ import {
   retryVideo,
   signIn,
   signOut,
+  setSubscription,
   signUp,
 } from "./api-client";
 
@@ -380,18 +381,64 @@ describe("getChannelPage", () => {
     stub = createServer((req, res) => {
       seen = req.url!;
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ channel: { name: "Ada" }, videos: [] }));
+      res.end(JSON.stringify({ channel: { name: "Ada" }, subscribers: 2, subscribed: null, videos: [] }));
     });
     await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
     const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
 
-    expect(await getChannelPage("Ada", baseUrl)).toEqual({ ok: true, channel: { name: "Ada" }, videos: [] });
+    expect(await getChannelPage("Ada", "token=abc", baseUrl)).toEqual({
+      ok: true,
+      channel: { name: "Ada" },
+      subscribers: 2,
+      subscribed: null,
+      videos: [],
+    });
     expect(seen).toBe("/api/v1/channels/Ada");
 
     await new Promise((resolve) => stub!.close(resolve));
-    expect(await getChannelPage("x", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
+    expect(await getChannelPage("x", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));
-    expect(await getChannelPage("x", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+    expect(await getChannelPage("x", "", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("setSubscription", () => {
+  it("subscribes with PUT, ends with DELETE and returns the state", async () => {
+    const seen: string[] = [];
+    stub = createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ subscribed: req.method === "PUT", subscribers: 1 }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    expect(await setSubscription("Ada Lovelace", true, baseUrl)).toEqual({
+      ok: true,
+      state: { subscribed: true, subscribers: 1 },
+    });
+    expect(await setSubscription("Ada Lovelace", false, baseUrl)).toEqual({
+      ok: true,
+      state: { subscribed: false, subscribers: 1 },
+    });
+    expect(seen).toEqual([
+      "PUT /api/v1/channels/Ada%20Lovelace/subscription",
+      "DELETE /api/v1/channels/Ada%20Lovelace/subscription",
+    ]);
+  });
+
+  it("tells the person how long to wait when over the limit", async () => {
+    stub = createServer((_req, res) => {
+      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "7" });
+      res.end(JSON.stringify({ msg: "too fast" }));
+    });
+    await new Promise<void>((resolve) => stub!.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+
+    const result = await setSubscription("ada", true, baseUrl);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(result.ok === false && result.message).toContain("7 seconds");
   });
 });
 

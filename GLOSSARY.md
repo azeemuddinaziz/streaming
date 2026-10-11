@@ -71,3 +71,11 @@ _Avoid_: Upvote, thumbs-up
 **Dislike**:
 The negative kind of Reaction. The number of Dislikes is visible only to the owner of the Video it is on (including on that Video's Comments), never to other Viewers. Each User still sees their own Reaction.
 _Avoid_: Downvote, thumbs-down
+
+**Subscription**:
+A signed-in User's standing choice to keep a Channel among their favorites. A User has at most one Subscription per Channel, cannot subscribe to their own Channel, and can end it at any time; ending it leaves no trace. Anonymous Viewers cannot subscribe.
+_Avoid_: Follow, favorite, bookmark
+
+**Subscriber**:
+A User who holds a Subscription to a Channel. The number of Subscribers of a Channel is public; who they are is not shown to anyone, the Channel's owner included.
+_Avoid_: Follower, fan

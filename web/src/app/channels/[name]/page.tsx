@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { cache } from "react";
+import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoCard } from "@/components/VideoCard";
-import { getChannelPage } from "@/lib/api-client";
+import { getChannelPage, getCurrentUser } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ name: string }> };
 
 // The page and its metadata share one request to the API.
-const load = cache((name: string) => getChannelPage(name));
+const load = cache(async (name: string) => getChannelPage(name, (await cookies()).toString()));
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const result = await load((await params).name);
@@ -39,10 +41,20 @@ export default async function ChannelPage({ params }: Props) {
     );
   }
 
+  const user = await getCurrentUser((await cookies()).toString());
+  const isOwner = user !== null && user.user.name.toLowerCase() === result.channel.name.toLowerCase();
+
   return (
     <section className="channel">
       <p className="eyebrow">Channel</p>
       <h1>{result.channel.name}</h1>
+      <SubscribeButton
+        channelName={result.channel.name}
+        signedIn={user !== null}
+        isOwner={isOwner}
+        subscribers={result.subscribers}
+        subscribed={result.subscribed === true}
+      />
 
       {result.videos.length === 0 ? (
         <p>No public videos yet.</p>

@@ -5,7 +5,7 @@ export class ChannelRepository {
   static async findByName(name: string) {
     return await prisma.user.findUnique({
       where: { nameKey: name.toLowerCase() },
-      select: { name: true, channel: { select: { id: true } } },
+      select: { id: true, name: true, channel: { select: { id: true } } },
     });
   }
 

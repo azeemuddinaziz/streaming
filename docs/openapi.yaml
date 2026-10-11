@@ -146,6 +146,12 @@ components:
         dislikes: { type: integer, description: Only present for the Video's owner. }
         myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE] }
       example: { likes: 4, myReaction: LIKE }
+    SubscriptionState:
+      type: object
+      properties:
+        subscribed: { type: boolean }
+        subscribers: { type: integer, description: "The Channel's public Subscriber count." }
+      example: { subscribed: true, subscribers: 7 }
     ShowcaseVideo:
       type: object
       properties:
@@ -625,6 +631,8 @@ paths:
                       likes: { type: integer, description: "The Like count, public." }
                       myReaction: { type: string, nullable: true, enum: [LIKE, DISLIKE], description: "The caller's own Reaction; null when signed out or none." }
                       dislikes: { type: integer, description: "The Dislike count. Only present for the Video's owner." }
+                      subscribers: { type: integer, description: "The Channel's Subscriber count, public." }
+                      subscribed: { type: boolean, nullable: true, description: "Whether the caller subscribes to the Channel; null when signed out, false for the owner." }
                       playlistPath: { type: string, description: "Only when READY. Host-relative, so it starts with /api/v1/media/." }
               example:
                 video:
@@ -640,6 +648,8 @@ paths:
                   isOwner: false
                   likes: 4
                   myReaction: null
+                  subscribers: 7
+                  subscribed: null
                   playlistPath: /api/v1/media/eyJhbGciOi.../master.m3u8
         "404": { $ref: "#/components/responses/NotFound" }
   /videos/{id}/views:
@@ -1149,7 +1159,10 @@ paths:
     get:
       tags: [Discovering]
       summary: A channel's page
-      description: The Channel's PUBLIC, READY, non-deleted Videos, newest first. The name is matched regardless of case.
+      description: |
+        The Channel's PUBLIC, READY, non-deleted Videos, newest first, and its public Subscriber
+        count. The name is matched regardless of case. A token is optional: with one, `subscribed`
+        says whether the caller subscribes. Who the Subscribers are is never returned.
       parameters:
         - { name: name, in: path, required: true, schema: { type: string }, example: ada-lovelace }
       responses:
@@ -1164,16 +1177,84 @@ paths:
                     type: object
                     properties:
                       name: { type: string }
+                  subscribers: { type: integer }
+                  subscribed: { type: boolean, nullable: true, description: "Null when signed out; false for the Channel's owner." }
                   videos:
                     type: array
                     items: { $ref: "#/components/schemas/ChannelVideo" }
               example:
                 channel: { name: ada-lovelace }
+                subscribers: 7
+                subscribed: null
                 videos:
                   - id: 7d3c0b9e-6f0a-4b1a-8d55-2a9f6e0c4a21
                     title: Holiday in Lisbon
                     createdAt: "2026-10-01T09:30:00.000Z"
                     thumbnailPath: /api/v1/media/eyJhbGciOi.../videos/7d3c0b9e/thumbnail.jpg
+        "404":
+          description: Unknown Channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Channel not found. }
+  /channels/{name}/subscription:
+    parameters:
+      - { name: name, in: path, required: true, schema: { type: string }, example: ada-lovelace }
+    put:
+      tags: [Watching]
+      summary: Subscribe to a Channel
+      description: |
+        Signed in only. Subscribes the caller; already subscribed still succeeds and changes
+        nothing. The name is matched regardless of case; an unknown Channel is 404 and the caller's
+        own Channel is 409.
+
+        Rate limit: at most 30 new Subscriptions per User per minute, counted from the
+        Subscription table (separate from the Comment and Reaction limits). The 31st is 429 with a
+        `Retry-After` header (seconds). Checked last.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: The caller's state and the public count.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Unknown Channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: Channel not found. }
+        "409":
+          description: The caller's own Channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: You cannot subscribe to your own channel. }
+        "429":
+          description: Thirty Subscriptions already made in the last minute.
+          headers:
+            Retry-After:
+              description: Seconds until another may be made.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { msg: You are subscribing too fast. Slow down and try again shortly. }
+    delete:
+      tags: [Watching]
+      summary: Unsubscribe from a Channel
+      description: |
+        Signed in only. Ends the caller's Subscription (the row is deleted); having none, or
+        calling it on their own Channel, succeeds and changes nothing. Not counted by the rate limit.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: "The caller's state (`subscribed` false) and the public count."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "404":
           description: Unknown Channel.
           content:

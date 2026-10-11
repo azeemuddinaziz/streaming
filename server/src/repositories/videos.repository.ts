@@ -34,7 +34,7 @@ export class VideoRepository {
     return await prisma.video.findFirst({
       where: { id: videoId, deletedAt: null },
       include: {
-        channel: { select: { userId: true, user: { select: { name: true } } } },
+        channel: { select: { id: true, userId: true, user: { select: { name: true } } } },
         _count: {
           select: { views: true, comments: { where: countedComments } },
         },

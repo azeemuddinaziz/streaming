@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cache } from "react";
 import { CommentSection } from "@/components/CommentSection";
 import { ReactionButtons } from "@/components/ReactionButtons";
+import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
 
@@ -53,7 +54,8 @@ export default async function WatchPage({ params }: Props) {
   }
 
   const { video } = result;
-  const signedIn = video.status === "READY" && (await getCurrentUser((await cookies()).toString())) !== null;
+  const user = await getCurrentUser((await cookies()).toString());
+  const signedIn = video.status === "READY" && user !== null;
   const title = video.title ?? "Untitled video";
   // The browser reaches the API at the public address, not the server-side one.
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
@@ -79,6 +81,13 @@ export default async function WatchPage({ params }: Props) {
         {" · "}
         {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
       </p>
+      <SubscribeButton
+        channelName={video.channelName}
+        signedIn={user !== null}
+        isOwner={video.isOwner}
+        subscribers={video.subscribers}
+        subscribed={video.subscribed === true}
+      />
       {video.status === "READY" && (
         <ReactionButtons
           videoId={video.id}
