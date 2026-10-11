@@ -169,56 +169,10 @@ a:hover {
   padding: 0 1rem;
 }
 
-.site-header,
-.site-footer {
-  border-color: var(--color-border);
-  border-style: solid;
-  border-width: 0;
-}
-
-.site-header {
-  border-bottom-width: 1px;
-}
-
-.site-footer {
-  border-top-width: 1px;
-  margin-top: auto;
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
-
-.site-header .page,
-.site-footer .page {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-}
-
-.brand {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.5rem;
-  color: var(--color-ink);
-  text-decoration: none;
-}
-
-.brand:hover {
-  color: var(--color-ink);
-}
-
 .eyebrow {
   margin: 0 0 1rem;
   font-size: 0.875rem;
   color: var(--color-muted);
-}
-
-.account-nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  font-size: 0.875rem;
 }
 
 .button {

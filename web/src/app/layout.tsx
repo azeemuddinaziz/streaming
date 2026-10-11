@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { SiteHeader } from "@/components/SiteHeader";
+import { cookies } from "next/headers";
+import { AppShell } from "@/components/AppShell";
+import { SiteFooter } from "@/components/SiteFooter";
+import { getCurrentUser } from "@/lib/api-client";
+import { SIDEBAR_COOKIE, parseSidebarCookie } from "@/lib/nav";
 import { WEB_ORIGIN } from "@/lib/share-metadata";
 import "./globals.css";
 
@@ -20,9 +24,16 @@ export const metadata: Metadata = {
   description: "Public videos, worth watching.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const cookieStore = await cookies();
+  // No sign-in cookie means nobody is signed in, so there is nothing to ask.
+  const account = cookieStore.has("token")
+    ? await getCurrentUser(cookieStore.toString())
+    : null;
+  const collapsed = parseSidebarCookie(cookieStore.get(SIDEBAR_COOKIE)?.value);
+
   return (
     <html
       lang="en"
@@ -32,16 +43,13 @@ export default function RootLayout({
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <SiteHeader />
-        <main id="main" className="page">
-          {children}
-        </main>
+        <AppShell accountName={account?.user.name ?? null} initialCollapsed={collapsed}>
+          <main id="main" className="page flex-1">
+            {children}
+          </main>
+          <SiteFooter />
+        </AppShell>
         <Toaster />
-        <footer className="site-footer">
-          <div className="page">
-            <span>© StreamSouk</span>
-          </div>
-        </footer>
       </body>
     </html>
   );
