@@ -50,14 +50,16 @@ export default async function ChannelPage({ params }: Props) {
     <section className="channel">
       <p className="eyebrow">Channel</p>
       <h1>{result.channel.name}</h1>
-      <SubscribeButton
-        channelName={result.channel.name}
-        signedIn={user !== null}
-        isOwner={isOwner}
-        subscribers={result.subscribers}
-        subscribed={result.subscribed === true}
-      />
-      <ShareButton subject="channel" title={`${result.channel.name} on StreamSouk`} />
+      <div className="flex flex-wrap items-center gap-3">
+        <SubscribeButton
+          channelName={result.channel.name}
+          signedIn={user !== null}
+          isOwner={isOwner}
+          subscribers={result.subscribers}
+          subscribed={result.subscribed === true}
+        />
+        <ShareButton subject="channel" title={`${result.channel.name} on StreamSouk`} />
+      </div>
 
       {result.videos.length === 0 ? (
         <p>No public videos yet.</p>

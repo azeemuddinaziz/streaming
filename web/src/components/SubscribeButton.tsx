@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { setSubscription } from "@/lib/api-client";
 
 type Props = {
@@ -47,25 +48,32 @@ export function SubscribeButton(props: Props) {
   const count = `${subscribers.toLocaleString("en")} ${subscribers === 1 ? "subscriber" : "subscribers"}`;
 
   return (
-    <div className="subscribe">
-      <span className="hint">{count}</span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-sm text-muted-foreground">{count}</span>
       {signedIn && !isOwner && (
-        <button
-          className="button button-secondary"
+        <Button
           type="button"
+          variant={subscribed ? "secondary" : "default"}
+          className="aria-pressed:border aria-pressed:border-primary"
           aria-pressed={subscribed}
           disabled={busy}
           onClick={toggle}
         >
           {subscribed ? "Subscribed" : "Subscribe"}
-        </button>
+        </Button>
       )}
       {!signedIn && (
-        <span className="hint">
-          <Link href="/sign-in">Sign in to subscribe</Link>
+        <span className="text-sm text-muted-foreground">
+          <Link className="text-primary underline underline-offset-4" href="/sign-in">
+            Sign in to subscribe
+          </Link>
         </span>
       )}
-      {message && <span role="alert">{message}</span>}
+      {message && (
+        <span role="alert" className="text-sm text-destructive">
+          {message}
+        </span>
+      )}
     </div>
   );
 }

@@ -3,10 +3,12 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { cache } from "react";
 import { CommentSection } from "@/components/CommentSection";
+import { DescriptionBox } from "@/components/DescriptionBox";
 import { ReactionButtons } from "@/components/ReactionButtons";
 import { ShareButton } from "@/components/ShareButton";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { PrivateBadge, WatchNotice } from "@/components/WatchNotice";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
 import { watchMetadata } from "@/lib/share-metadata";
 
@@ -32,80 +34,78 @@ export default async function WatchPage({ params }: Props) {
   const result = await load((await params).id);
 
   if (!result.ok) {
-    return result.reason === "not-found" ? (
-      <section className="watch">
-        <p className="eyebrow">Watch</p>
-        <h1>
-          Video <em>not found</em>
-        </h1>
-        <p>This video does not exist, or it is private.</p>
-        <p>
-          <Link href="/">Back to StreamSouk</Link>
-        </p>
-      </section>
-    ) : (
-      <section className="watch">
-        <p role="alert">This video could not be loaded right now. Try again in a moment.</p>
-      </section>
-    );
+    return <WatchNotice kind={result.reason === "not-found" ? "not-found" : "unavailable"} />;
   }
 
   const { video } = result;
   const user = await getCurrentUser((await cookies()).toString());
-  const signedIn = video.status === "READY" && user !== null;
+  const ready = video.status === "READY";
+  const signedIn = ready && user !== null;
   const title = video.title ?? "Untitled video";
   // The browser reaches the API at the public address, not the server-side one.
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
 
   return (
-    <section className="watch">
-      {video.status === "READY" && video.playlistPath ? (
+    <article className="grid gap-4 pb-8">
+      {ready && video.playlistPath ? (
         <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} videoId={video.id} />
-      ) : video.status === "FAILED" ? (
-        <p className="notice" role="status">
-          Processing this video failed. <Link href="/studio">Retry it from your studio</Link>.
-        </p>
       ) : (
-        <p className="notice" role="status">
-          This video is still processing. Come back later.
-        </p>
+        <WatchNotice kind={video.status === "FAILED" ? "failed" : "processing"} />
       )}
-      <h1>{title}</h1>
-      <p className="hint">
-        <Link href={`/channels/${encodeURIComponent(video.channelName)}`}>{video.channelName}</Link>
-        {" · "}
-        {new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
-        {" · "}
-        {video.views.toLocaleString("en")} {video.views === 1 ? "view" : "views"}
-      </p>
-      <SubscribeButton
-        channelName={video.channelName}
-        signedIn={user !== null}
-        isOwner={video.isOwner}
-        subscribers={video.subscribers}
-        subscribed={video.subscribed === true}
+
+      <div className="grid gap-2">
+        <h1 className="font-sans text-xl font-semibold break-words sm:text-2xl">{title}</h1>
+        {video.visibility === "PRIVATE" && (
+          <div>
+            <PrivateBadge />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            className="font-medium hover:underline"
+            href={`/channels/${encodeURIComponent(video.channelName)}`}
+          >
+            {video.channelName}
+          </Link>
+          <SubscribeButton
+            channelName={video.channelName}
+            signedIn={user !== null}
+            isOwner={video.isOwner}
+            subscribers={video.subscribers}
+            subscribed={video.subscribed === true}
+          />
+        </div>
+        {ready && (
+          <div className="flex flex-wrap items-center gap-2">
+            <ReactionButtons
+              videoId={video.id}
+              signedIn={signedIn}
+              likes={video.likes}
+              dislikes={video.dislikes}
+              myReaction={video.myReaction}
+            />
+            <ShareButton subject="video" title={title} withStartTime privateVideo={video.visibility === "PRIVATE"} />
+          </div>
+        )}
+      </div>
+
+      <DescriptionBox
+        views={video.views}
+        date={new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
+        description={video.description}
       />
-      {video.status === "READY" && (
-        <ReactionButtons
-          videoId={video.id}
-          signedIn={signedIn}
-          likes={video.likes}
-          dislikes={video.dislikes}
-          myReaction={video.myReaction}
-        />
-      )}
-      {video.status === "READY" && (
-        <ShareButton subject="video" title={title} withStartTime privateVideo={video.visibility === "PRIVATE"} />
-      )}
-      {video.description && <p className="description">{video.description}</p>}
-      {video.status === "READY" && !video.commentsEnabled && (
-        <p className="notice" role="status">
+
+      {ready && !video.commentsEnabled && (
+        <p className="rounded-lg border bg-card p-4 text-sm" role="status">
           {video.isOwner
             ? "Comments are turned off for this video. Only you can see the existing ones. Turn them back on in your studio."
             : "Comments are turned off for this video."}
         </p>
       )}
-      {video.status === "READY" && (video.commentsEnabled || video.isOwner) && (
+      {ready && (video.commentsEnabled || video.isOwner) && (
         <CommentSection
           videoId={video.id}
           initialCount={video.comments ?? 0}
@@ -114,6 +114,6 @@ export default async function WatchPage({ params }: Props) {
           commentsEnabled={video.commentsEnabled}
         />
       )}
-    </section>
+    </article>
   );
 }
