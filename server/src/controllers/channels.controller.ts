@@ -3,6 +3,6 @@ import { ChannelService } from "../services/channels.service.ts";
 
 export const ChannelController = {
   async page(req: Request, res: Response) {
-    res.status(200).json(await ChannelService.page(req.params.name as string, req.user?.id));
+    res.status(200).json(await ChannelService.page(req.params.name as string, req.query.page, req.user?.id));
   },
 };

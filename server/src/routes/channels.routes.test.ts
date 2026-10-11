@@ -80,3 +80,59 @@ describe("channel page", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("channel page paging", () => {
+  async function fill(owner: Awaited<ReturnType<typeof person>>, count: number) {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) ids.push(await video(owner, `Video ${i}`));
+    return ids;
+  }
+
+  it("serves 24 per page, newest first, with hasMore and no leaked extra row", async () => {
+    const ada = await person("Ada-Lovelace");
+    const ids = await fill(ada, 25);
+    await video(ada, "Hidden", { visibility: "PRIVATE" });
+    await video(ada, "Gone", { deletedAt: new Date() });
+    await video(ada, "Busy", { status: "PROCESSING" });
+    // Newest first, ties by id, whatever the insertion timing was.
+    const rows = await prisma.video.findMany({ where: { id: { in: ids } } });
+    const newestFirst = rows
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1))
+      .map((row) => row.id);
+
+    const first = await (await api.request("/channels/ada-lovelace")).json();
+    expect(first.page).toBe(1);
+    expect(first.hasMore).toBe(true);
+    expect(first.videos.map((v: { id: string }) => v.id)).toEqual(newestFirst.slice(0, 24));
+
+    const second = await (await api.request("/channels/ada-lovelace?page=2")).json();
+    expect(second.page).toBe(2);
+    expect(second.hasMore).toBe(false);
+    expect(second.videos.map((v: { id: string }) => v.id)).toEqual(newestFirst.slice(24));
+    expect(second.channel).toEqual({ name: "Ada-Lovelace" });
+    expect(second).toHaveProperty("subscribers");
+  });
+
+  it("has no more when exactly one page is full", async () => {
+    const ada = await person("Ada-Lovelace");
+    await fill(ada, 24);
+
+    const body = await (await api.request("/channels/ada-lovelace")).json();
+    expect(body.videos).toHaveLength(24);
+    expect(body.hasMore).toBe(false);
+  });
+
+  it("answers an out-of-range page with no videos, and an invalid page as page 1", async () => {
+    const ada = await person("Ada-Lovelace");
+    await fill(ada, 2);
+
+    const beyond = await (await api.request("/channels/ada-lovelace?page=9")).json();
+    expect(beyond).toMatchObject({ videos: [], page: 9, hasMore: false });
+
+    for (const bad of ["0", "-3", "abc", "1.5"]) {
+      const body = await (await api.request(`/channels/ada-lovelace?page=${bad}`)).json();
+      expect(body.page).toBe(1);
+      expect(body.videos).toHaveLength(2);
+    }
+  });
+});
