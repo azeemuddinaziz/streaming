@@ -20,7 +20,8 @@ export function ChannelNotice({ kind, name }: { kind: "not-found" | "unavailable
         {notFound ? "No one has this account name." : "Try again in a moment."}
       </p>
       <Button asChild variant="outline">
-        {notFound ? <Link href="/">Back to StreamSouk</Link> : <Link href={`/channels/${encodeURIComponent(name)}`}>Try again</Link>}
+        {notFound ? <Link href="/">Back to StreamSouk</Link> : // A full load, so the API is asked again rather than a cached client route reused.
+          <a href={`/channels/${encodeURIComponent(name)}`}>Try again</a>}
       </Button>
     </div>
   );
