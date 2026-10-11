@@ -397,9 +397,6 @@ describe("getChannelPage", () => {
     });
     expect(seen).toBe("/api/v1/channels/Ada");
 
-    await getChannelPage("Ada", "", baseUrl, 3);
-    expect(seen).toBe("/api/v1/channels/Ada?page=3");
-
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getChannelPage("x", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));

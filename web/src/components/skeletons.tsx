@@ -3,12 +3,12 @@ import { VIDEO_GRID_CLASS } from "@/lib/video-grid";
 
 // Shared loading pieces, each mirroring the layout it stands in for.
 
-// Mirrors the Channel page's header: the name, then the count and controls.
+// Mirrors the Channel page's header: the name, with the count and controls beside it from sm.
 export function ChannelHeaderSkeleton() {
   return (
-    <div className="mb-8 grid gap-3" aria-hidden="true">
+    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" aria-hidden="true">
       <Skeleton className="h-12 w-2/3 max-w-md" />
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-3">
         <Skeleton className="h-5 w-28" />
         <Skeleton className="h-9 w-28" />
         <Skeleton className="h-9 w-24" />

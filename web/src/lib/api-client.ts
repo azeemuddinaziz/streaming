@@ -460,17 +460,16 @@ export type ChannelResult =
   | ({ ok: true } & ChannelPage)
   | { ok: false; reason: "not-found" | "unavailable" };
 
-// For server components: loads a Channel's public page, found by account name.
+// For server components: loads a Channel's public page (the first page of its
+// Videos), found by account name.
 // The cookie tells the API who is asking, for `subscribed`.
 export async function getChannelPage(
   name: string,
   cookie: string,
   baseUrl: string = getApiBaseUrl(),
-  page = 1,
 ): Promise<ChannelResult> {
   try {
-    const query = page > 1 ? `?page=${page}` : "";
-    const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(name)}${query}`, {
+    const response = await fetch(`${baseUrl}/api/v1/channels/${encodeURIComponent(name)}`, {
       headers: { Cookie: cookie },
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
@@ -501,6 +500,7 @@ export async function getChannelVideos(
     if (!response.ok) return { ok: false };
 
     const body = await response.json();
+    if (!Array.isArray(body.videos)) return { ok: false };
     return { ok: true, videos: body.videos, page: body.page, hasMore: body.hasMore };
   } catch {
     return { ok: false };
