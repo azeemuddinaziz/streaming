@@ -5,6 +5,7 @@ import { RetryButton } from "@/components/RetryButton";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl, type StudioVideo } from "@/lib/api-client";
 import { relativeDate } from "@/lib/relative-date";
+import { ProcessingPhases } from "./ProcessingPhases";
 import { StatusBadge } from "./StatusBadge";
 import { VisibilityBadge } from "./VisibilityBadge";
 
@@ -50,6 +51,9 @@ export function StudioVideoRow({ video }: { video: StudioVideo }) {
           <StatusBadge status={video.status} />
           <VisibilityBadge visibility={video.visibility} />
         </div>
+        {video.status === "PROCESSING" && (
+          <ProcessingPhases label={video.label} progress={video.processingProgress} />
+        )}
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <time
             dateTime={video.createdAt}

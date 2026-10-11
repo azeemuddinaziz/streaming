@@ -5,7 +5,7 @@ import { AlertTriangleIcon } from "lucide-react";
 import { StudioFilter } from "@/components/studio/StudioFilter";
 import { StudioEmpty, StudioError } from "@/components/studio/StudioNotice";
 import { StudioPagination } from "@/components/studio/StudioPagination";
-import { StudioVideoRow } from "@/components/studio/StudioVideoRow";
+import { StudioVideoList } from "@/components/studio/StudioVideoList";
 import { UnfinishedUploads } from "@/components/studio/UnfinishedUploads";
 import { getStudioPage, getUnfinishedUploads } from "@/lib/api-client";
 import { signInHref } from "@/lib/return-address";
@@ -60,11 +60,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Searc
               <p className="mt-4 text-sm text-muted-foreground">
                 {result.total.toLocaleString("en")} {result.total === 1 ? "video" : "videos"}
               </p>
-              <ul className="mt-4 grid gap-3">
-                {result.videos.map((video) => (
-                  <StudioVideoRow key={video.id} video={video} />
-                ))}
-              </ul>
+              <StudioVideoList videos={result.videos} page={result.page} status={query.status} />
               <StudioPagination page={result.page} total={result.total} status={query.status} />
             </>
           )}
