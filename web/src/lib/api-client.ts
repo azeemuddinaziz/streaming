@@ -16,6 +16,8 @@ export type StudioVideo = {
   title: string | null;
   description: string | null;
   status: "PROCESSING" | "READY" | "FAILED";
+  // How far processing has got, 0 to 100; null when not known yet.
+  processingProgress: number | null;
   visibility: "PRIVATE" | "UNLISTED" | "PUBLIC";
   // The owner has Comments on for this Video.
   commentsEnabled: boolean;
@@ -177,6 +179,30 @@ export async function getStudioPage(
   try {
     const response = await fetch(`${baseUrl}/api/v1/videos/mine?${params}`, {
       headers: { Cookie: cookie },
+      cache: "no-store",
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+    if (response.status === 401) return { ok: false, reason: "signed-out" };
+    if (!response.ok) return { ok: false, reason: "unavailable" };
+
+    const { videos, page, hasMore, total } = await response.json();
+    return { ok: true, videos, page, hasMore, total };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
+// For the browser: the same page again, to see processing move. A failure is
+// only "not now"; the caller tries again on its next tick.
+export async function fetchStudioPage(
+  query: { page: number; status?: StudioVideo["status"] },
+  baseUrl: string = getApiBaseUrl(),
+): Promise<StudioPageResult> {
+  const params = new URLSearchParams({ page: String(query.page) });
+  if (query.status) params.set("status", query.status);
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/videos/mine?${params}`, {
+      credentials: "include",
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
