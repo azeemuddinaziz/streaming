@@ -110,9 +110,19 @@ h1,
 h2,
 h3 {
   margin: 0;
+  line-height: 1.1;
+}
+
+/* The display serif is for page titles only (docs/design.md). */
+h1 {
   font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
-  line-height: 1.1;
+}
+
+h2,
+h3 {
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 600;
 }
 
 h1 {

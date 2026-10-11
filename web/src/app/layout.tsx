@@ -11,6 +11,7 @@ const display = Instrument_Serif({
   variable: "--font-display",
 });
 const body = Inter({ subsets: ["latin"], variable: "--font-body" });
+// Not --font-mono: that name is Tailwind's own theme variable, mapped in globals.css.
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
