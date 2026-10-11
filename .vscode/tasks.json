@@ -10,8 +10,7 @@
       "presentation": {
         "panel": "dedicated",
         "reveal": "always"
-      },
-      "runOptions": { "runOn": "folderOpen" }
+      }
     },
     {
       "label": "WEB",
@@ -22,8 +21,7 @@
       "presentation": {
         "panel": "dedicated",
         "reveal": "always"
-      },
-      "runOptions": { "runOn": "folderOpen" }
+      }
     },
     {
       "label": "Tusd",
@@ -34,8 +32,7 @@
       "presentation": {
         "panel": "dedicated",
         "reveal": "always"
-      },
-      "runOptions": { "runOn": "folderOpen" }
+      }
     },
     {
       "label": "Worker",
@@ -46,8 +43,7 @@
       "presentation": {
         "panel": "dedicated",
         "reveal": "always"
-      },
-      "runOptions": { "runOn": "folderOpen" }
+      }
     },
     {
       "label": "Prisma Studio",
@@ -59,6 +55,17 @@
         "panel": "dedicated",
         "reveal": "always"
       }
+    },
+    {
+      "label": "Start all",
+      "dependsOn": [
+        "API",
+        "Worker",
+        "Tusd",
+        "WEB"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
     }
   ]
 }
