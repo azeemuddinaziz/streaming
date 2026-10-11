@@ -17,7 +17,7 @@ import {
   reactToVideo,
   getCurrentUser,
   getPublicVideos,
-  getStudioVideos,
+  getStudioPage,
   getSubscriptions,
   getUnfinishedUploads,
   getWatchVideo,
@@ -208,7 +208,7 @@ describe("getCurrentUser", () => {
   });
 });
 
-describe("getStudioVideos", () => {
+describe("getStudioPage", () => {
   const videos = [
     {
       id: "v1",
@@ -219,27 +219,40 @@ describe("getStudioVideos", () => {
     },
   ];
 
-  it("passes the cookie on and returns the person's Videos", async () => {
-    const { baseUrl, requests } = await startRecordingApi(200, { videos });
+  it("passes the cookie, page and status on and returns the page", async () => {
+    const { baseUrl, requests } = await startRecordingApi(200, { videos, page: 2, hasMore: false, total: 25 });
 
-    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: true, items: videos });
+    expect(await getStudioPage("token=abc", { page: 2, status: "FAILED" }, baseUrl)).toEqual({
+      ok: true,
+      videos,
+      page: 2,
+      hasMore: false,
+      total: 25,
+    });
     expect(requests[0]!.headers.cookie).toBe("token=abc");
-    expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/videos/mine" });
+    expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/videos/mine?page=2&status=FAILED" });
+  });
+
+  it("leaves the status out when there is no filter", async () => {
+    const { baseUrl, requests } = await startRecordingApi(200, { videos, page: 1, hasMore: false, total: 1 });
+
+    await getStudioPage("token=abc", { page: 1 }, baseUrl);
+    expect(requests[0]!.url).toBe("/api/v1/videos/mine?page=1");
   });
 
   it("returns nothing when nobody is signed in", async () => {
     const { baseUrl } = await startRecordingApi(401, { msg: "User not Authenticated." });
 
-    expect(await getStudioVideos("", baseUrl)).toEqual({ ok: false, reason: "signed-out" });
+    expect(await getStudioPage("", { page: 1 }, baseUrl)).toEqual({ ok: false, reason: "signed-out" });
   });
 
   it("says the studio is unavailable, not signed out, when the API fails", async () => {
     const { baseUrl } = await startRecordingApi(500, { msg: "Something went wrong." });
-    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: false, reason: "unavailable" });
+    expect(await getStudioPage("token=abc", { page: 1 }, baseUrl)).toEqual({ ok: false, reason: "unavailable" });
 
     await new Promise((resolve) => stub!.close(resolve));
     stub = undefined;
-    expect(await getStudioVideos("token=abc", baseUrl)).toEqual({ ok: false, reason: "unavailable" });
+    expect(await getStudioPage("token=abc", { page: 1 }, baseUrl)).toEqual({ ok: false, reason: "unavailable" });
   });
 });
 

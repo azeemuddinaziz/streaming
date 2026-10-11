@@ -1,106 +1,73 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AlertTriangleIcon } from "lucide-react";
+import { StudioFilter } from "@/components/studio/StudioFilter";
+import { StudioEmpty, StudioError } from "@/components/studio/StudioNotice";
+import { StudioPagination } from "@/components/studio/StudioPagination";
+import { StudioVideoRow } from "@/components/studio/StudioVideoRow";
+import { UnfinishedUploads } from "@/components/studio/UnfinishedUploads";
+import { getStudioPage, getUnfinishedUploads } from "@/lib/api-client";
 import { signInHref } from "@/lib/return-address";
-import { VideoDetailsForm } from "@/components/VideoDetailsForm";
-import { DeleteVideoButton } from "@/components/DeleteVideoButton";
-import { ThumbnailPicker } from "@/components/ThumbnailPicker";
-import { RetryButton } from "@/components/RetryButton";
-import { getStudioVideos, getUnfinishedUploads } from "@/lib/api-client";
+import { lastPage, parseStudioQuery, studioHref } from "@/lib/studio-list";
 
 export const metadata: Metadata = { title: "Studio · StreamSouk" };
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL = {
-  PROCESSING: "Processing",
-  READY: "Ready",
-  FAILED: "Failed",
-} as const;
+type SearchParams = Promise<{ page?: string | string[]; status?: string | string[] }>;
 
-const VISIBILITY_LABEL = {
-  PRIVATE: "Private",
-  UNLISTED: "Unlisted",
-  PUBLIC: "Public",
-} as const;
+export default async function StudioPage({ searchParams }: { searchParams: SearchParams }) {
+  const query = parseStudioQuery(await searchParams);
+  const here = studioHref(query);
 
-export default async function StudioPage() {
   const cookieStore = await cookies();
-  if (!cookieStore.has("token")) redirect(signInHref("/studio"));
+  if (!cookieStore.has("token")) redirect(signInHref(here));
 
   const cookie = cookieStore.toString();
-  const [result, unfinished] = await Promise.all([
-    getStudioVideos(cookie),
-    getUnfinishedUploads(cookie),
-  ]);
-  if (!result.ok && result.reason === "signed-out") redirect(signInHref("/studio"));
+  const [result, unfinished] = await Promise.all([getStudioPage(cookie, query), getUnfinishedUploads(cookie)]);
+  if (!result.ok && result.reason === "signed-out") redirect(signInHref(here));
+
+  // A page past the end (a bookmark, or the last Video on a page just deleted) goes to the last page.
+  if (result.ok && result.videos.length === 0 && result.total > 0 && query.page > lastPage(result.total)) {
+    redirect(studioHref({ ...query, page: lastPage(result.total) }));
+  }
 
   return (
-    <section className="studio">
-      <p className="eyebrow">Studio</p>
-      <h1>
-        Your <em>videos</em>
-      </h1>
-
-      {!result.ok ? (
-        <p role="alert">
-          Your videos could not be loaded right now. Try again in a moment.
-        </p>
-      ) : result.items.length === 0 ? (
-        <p>
-          Nothing here yet. <Link href="/upload">Upload a video</Link> to get
-          started.
-        </p>
-      ) : (
-        <ul className="video-list">
-          {result.items.map((video) => (
-            <li key={video.id}>
-              <strong>{video.label}</strong>
-              <span className="hint">
-                {STATUS_LABEL[video.status]} · {VISIBILITY_LABEL[video.visibility]}
-              </span>
-              {video.status === "READY" && (
-                <span className="hint">
-                  {video.likes.toLocaleString("en")} {video.likes === 1 ? "like" : "likes"} ·{" "}
-                  {video.dislikes.toLocaleString("en")} {video.dislikes === 1 ? "dislike" : "dislikes"}
-                </span>
-              )}
-              {video.status === "READY" && <Link href={`/watch/${video.id}`}>Watch</Link>}
-              {video.status === "FAILED" && <RetryButton videoId={video.id} />}
-              <DeleteVideoButton videoId={video.id} label={video.label} />
-              {video.status === "READY" && (
-                <ThumbnailPicker
-                  videoId={video.id}
-                  label={video.label}
-                  thumbnailPath={video.thumbnailPath}
-                />
-              )}
-              <VideoDetailsForm video={video} />
-            </li>
-          ))}
-        </ul>
-      )}
+    <section>
+      <h1 className="mb-6 font-serif text-4xl sm:text-5xl">Your videos</h1>
 
       {!unfinished.ok && (
-        <p role="alert">Your unfinished uploads could not be loaded right now.</p>
+        <p role="alert" className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertTriangleIcon aria-hidden="true" className="size-4" />
+          Your unfinished uploads could not be loaded right now.
+        </p>
       )}
+      {unfinished.ok && unfinished.items.length > 0 && <UnfinishedUploads uploads={unfinished.items} />}
 
-      {unfinished.ok && unfinished.items.length > 0 && (
+      {!result.ok ? (
+        <StudioError href={here} />
+      ) : result.videos.length === 0 && !query.status ? (
+        <StudioEmpty status={undefined} />
+      ) : (
         <>
-          <h2>Unfinished uploads</h2>
-          <p className="hint">
-            These stopped part way. <Link href="/upload">Choose the same file again</Link>{" "}
-            to carry on where it stopped. They are discarded 24 hours after they
-            started.
-          </p>
-          <ul className="video-list">
-            {unfinished.items.map((upload) => (
-              <li key={upload.id}>
-                <strong>{upload.filename}</strong>
-                <span className="hint">Needs resume</span>
-              </li>
-            ))}
-          </ul>
+          <StudioFilter status={query.status} />
+          {result.videos.length === 0 ? (
+            <div className="mt-6">
+              <StudioEmpty status={query.status} />
+            </div>
+          ) : (
+            <>
+              <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+                {result.total.toLocaleString("en")} {result.total === 1 ? "video" : "videos"}
+              </p>
+              <ul className="mt-4 grid gap-3">
+                {result.videos.map((video) => (
+                  <StudioVideoRow key={video.id} video={video} />
+                ))}
+              </ul>
+              <StudioPagination page={result.page} total={result.total} status={query.status} />
+            </>
+          )}
         </>
       )}
     </section>
