@@ -13,8 +13,7 @@ export const VideoController = {
 
   // The signed-in person's own Videos, for their studio.
   async mine(req: Request, res: Response) {
-    const videos = await VideoService.listStudio(req.user!.id);
-    res.status(200).json({ videos });
+    res.status(200).json(await VideoService.listStudio(req.user!.id, req.query.page, req.query.status));
   },
 
   async watch(req: Request, res: Response) {
