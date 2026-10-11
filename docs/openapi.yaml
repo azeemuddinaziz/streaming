@@ -1197,6 +1197,41 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { msg: Channel not found. }
+  /users/me/subscriptions:
+    get:
+      tags: [Watching]
+      summary: Your subscribed Channels
+      description: |
+        Signed in only. The Channels the caller subscribes to, most recently subscribed first (ties
+        broken by id), 24 per page. `hasMore` says another page follows; a missing or invalid `page`
+        is 1. Entries carry no Video data, and the list is always the caller's own.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+      responses:
+        "200":
+          description: One page of subscribed Channels.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        subscribers: { type: integer }
+                        subscribed: { type: boolean, enum: [true] }
+                  page: { type: integer }
+                  hasMore: { type: boolean }
+              example:
+                channels:
+                  - { name: ada-lovelace, subscribers: 7, subscribed: true }
+                page: 1
+                hasMore: false
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /channels/{name}/subscription:
     parameters:
       - { name: name, in: path, required: true, schema: { type: string }, example: ada-lovelace }

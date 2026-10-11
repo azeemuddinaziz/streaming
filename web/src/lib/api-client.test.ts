@@ -17,6 +17,7 @@ import {
   getCurrentUser,
   getPublicVideos,
   getStudioVideos,
+  getSubscriptions,
   getUnfinishedUploads,
   getWatchVideo,
   replaceThumbnail,
@@ -399,6 +400,28 @@ describe("getChannelPage", () => {
     expect(await getChannelPage("x", "", await startStubApi(404))).toEqual({ ok: false, reason: "not-found" });
     await new Promise((resolve) => stub!.close(resolve));
     expect(await getChannelPage("x", "", await startStubApi(500))).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("getSubscriptions", () => {
+  it("passes the page and cookie on and returns the Channels", async () => {
+    const body = { channels: [{ name: "Ada", subscribers: 2, subscribed: true }], page: 2, hasMore: false };
+    const { baseUrl, requests } = await startRecordingApi(200, body);
+
+    expect(await getSubscriptions(2, "token=abc", baseUrl)).toEqual({ ok: true, ...body });
+    expect(requests[0]!.headers.cookie).toBe("token=abc");
+    expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/users/me/subscriptions?page=2" });
+  });
+
+  it("reports signed-out for 401 and unavailable otherwise", async () => {
+    const { baseUrl } = await startRecordingApi(401, { msg: "User not Authenticated." });
+    expect(await getSubscriptions(1, "", baseUrl)).toEqual({ ok: false, reason: "signed-out" });
+
+    await new Promise((resolve) => stub!.close(resolve));
+    expect(await getSubscriptions(1, "token=abc", await startStubApi(500))).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
   });
 });
 

@@ -6,6 +6,7 @@ import { SubscriptionRepository } from "../repositories/subscriptions.repository
 // A User may subscribe this many times in any window of this length.
 const WRITE_LIMIT = 30;
 const WRITE_WINDOW_MS = 60_000;
+const LIST_PAGE_SIZE = 24;
 
 // The Channel a name stands for, regardless of case; unknown is not found.
 async function findChannel(name: string) {
@@ -54,6 +55,24 @@ export const SubscriptionService = {
     enrich({ subscriptionFrom: await SubscriptionRepository.exists(userId, channelId) });
     await SubscriptionRepository.remove(userId, channelId);
     return { subscribed: false, subscribers: await SubscriptionRepository.count(channelId) };
+  },
+
+  // One page of the Channels the User subscribes to, most recent first. A page
+  // number that is not a whole number from 1 is the first page.
+  async list(userId: string, pageParam: unknown) {
+    enrich({ subscriptionAction: "list" });
+    const parsed = Number(pageParam);
+    const page = Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+
+    const rows = await SubscriptionRepository.listForUser(userId, (page - 1) * LIST_PAGE_SIZE, LIST_PAGE_SIZE);
+    const shown = rows.slice(0, LIST_PAGE_SIZE);
+    const counts = await SubscriptionRepository.countsFor(shown.map((row) => row.channelId));
+    enrich({ subscriptionCount: shown.length });
+    return {
+      channels: shown.map((row) => ({ name: row.name, subscribers: counts.get(row.channelId)!, subscribed: true })),
+      page,
+      hasMore: rows.length > LIST_PAGE_SIZE,
+    };
   },
 
   // The public count and the viewer's own state, for Channel and watch
