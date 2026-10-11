@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/SiteHeader";
+import { WEB_ORIGIN } from "@/lib/share-metadata";
 import "./globals.css";
 
 const display = Instrument_Serif({
@@ -13,6 +14,7 @@ const body = Inter({ subsets: ["latin"], variable: "--font-body" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(WEB_ORIGIN),
   title: "StreamSouk",
   description: "Public videos, worth watching.",
 };

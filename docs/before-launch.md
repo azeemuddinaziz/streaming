@@ -7,4 +7,4 @@ Each is a standalone module, kept separate from the core publishing and watching
 - [ ] Comments (designed; tickets #49 to #53)
 - [ ] Subscriptions (to a Channel)
 - [ ] Likes and dislikes (on Videos and on Comments)
-- [ ] Sharing
+- [ ] Sharing (designed; tickets #68, #69)

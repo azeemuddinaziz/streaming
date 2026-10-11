@@ -81,6 +81,7 @@ describe("watching a Video", () => {
         title: "Holiday",
         description: "Two weeks away",
         status: "READY",
+        visibility,
         channelName: "Ada-Lovelace",
       });
       const playlist = await api.request(watched.playlistPath.replace("/api/v1", ""));

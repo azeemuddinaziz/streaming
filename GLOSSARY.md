@@ -79,3 +79,7 @@ _Avoid_: Follow, favorite, bookmark
 **Subscriber**:
 A User who holds a Subscription to a Channel. The number of Subscribers of a Channel is public; who they are is not shown to anyone, the Channel's owner included.
 _Avoid_: Follower, fan
+
+**Share link**:
+The address of a Video's watch page, or of a Channel's page, that a person copies or hands to the device's share sheet so someone else can open it. It can name a start time within a Video. Sharing leaves no record and has no count: only the link travels, and it grants nothing the Video's Visibility does not already grant, so a private Video's link still opens for its owner alone.
+_Avoid_: Share (as a counted thing), embed, repost
