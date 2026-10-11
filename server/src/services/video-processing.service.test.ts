@@ -138,18 +138,21 @@ describe("processing progress", () => {
     expect(failed.processingProgress).toBe(47);
   });
 
-  it("stays null when the transcoder reports nothing", async () => {
+  it("stays null throughout when the transcoder reports nothing, then 100 when ready", async () => {
     const video = await newVideo();
-    let during: number | null | undefined;
-    const silent: Transcoder = async (input, outputDir) => {
-      during = (await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress;
-      return transcode(input, outputDir);
+    const seen: (number | null)[] = [];
+    const storage = fakeStorage().storage;
+    const put = storage.put;
+    storage.put = async (...args) => {
+      seen.push((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress);
+      return put(...args);
     };
 
-    await VideoProcessingService.process(video.id, fakeStorage().storage, silent);
+    await VideoProcessingService.process(video.id, storage, transcode);
 
-    // Only the download step is known, so the bar is never NaN or a guess.
-    expect(during === null || during === 5).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((value) => value === null)).toBe(true);
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).processingProgress).toBe(100);
   });
 });
 

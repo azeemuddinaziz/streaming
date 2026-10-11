@@ -23,13 +23,19 @@ const WRITE_EVERY_MS = 2000;
 
 // Writes progress to the Video, throttled. Writes are chained so they land in
 // order, and a failed one is dropped: the bar is cosmetic and must never fail
-// a job.
+// a job. Nothing is written until the transcoder has reported once (`start`),
+// so a source whose length is unknown stays null instead of showing a guess.
 function progressWriter(videoId: string, now: () => number) {
+  let started = false;
   let written = -Infinity;
   let writtenAt = 0;
   let chain: Promise<void> = Promise.resolve();
   return {
+    start() {
+      started = true;
+    },
     report(percent: number) {
+      if (!started) return;
       const value = Math.min(99, Math.max(0, Math.floor(percent)));
       const moved = value - written;
       if (moved <= 0) return;
@@ -58,10 +64,10 @@ export const VideoProcessingService = {
       const original = path.join(workDir, "original");
       const output = path.join(workDir, "out");
       await storage.downloadOriginal(video.upload.tusId, original);
-      progress.report(DOWNLOAD_WEIGHT);
-      const result = await transcode(original, output, (percent) =>
-        progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT),
-      );
+      const result = await transcode(original, output, (percent) => {
+        progress.start();
+        progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT);
+      });
 
       const prefix = `videos/${videoId}/`;
       const base = DOWNLOAD_WEIGHT + TRANSCODE_WEIGHT;
