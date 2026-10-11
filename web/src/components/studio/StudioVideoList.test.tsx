@@ -8,7 +8,7 @@ import { POLL_INTERVAL_MS } from "./useStudioPolling";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/DeleteVideoButton", () => ({ DeleteVideoButton: () => null }));
 vi.mock("@/components/RetryButton", () => ({ RetryButton: () => null }));
 vi.mock("@/lib/api-client", async (importOriginal) => ({
@@ -121,7 +121,45 @@ describe("StudioVideoList polling", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     const live = screen.getByRole("status");
     expect(live.getAttribute("aria-live")).toBe("polite");
-    expect(live.textContent).toBe("a.mp4 is ready. b.mp4 failed to process.");
+    expect(live.textContent).toBe("a.mp4 is ready. b.mp4 could not be processed.");
+  });
+
+  it("drops a row the poll no longer returns (it left a Processing filter) and reloads", async () => {
+    vi.mocked(fetchStudioPage).mockResolvedValue(page([video("b", { processingProgress: 10 })]));
+    render(<StudioVideoList videos={[video("a"), video("b")]} page={1} status="PROCESSING" />);
+
+    await advance(POLL_INTERVAL_MS);
+
+    expect(screen.queryByText("a.mp4")).toBeNull();
+    expect(screen.getByText("b.mp4")).toBeTruthy();
+    expect(toast).toHaveBeenCalledWith("a.mp4 has finished processing");
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status").textContent).toBe("a.mp4 has finished processing.");
+  });
+
+  it("stops and asks the server to redirect when the session is gone", async () => {
+    vi.mocked(fetchStudioPage).mockResolvedValue({ ok: false, reason: "signed-out" });
+    render(<StudioVideoList videos={[video("a")]} page={1} status={undefined} />);
+
+    await advance(POLL_INTERVAL_MS);
+    await advance(POLL_INTERVAL_MS * 3);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(fetchStudioPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows READY and FAILED Videos as their own states, with no bar", () => {
+    render(
+      <StudioVideoList
+        videos={[video("a", { status: "READY", processingProgress: 100 }), video("b", { status: "FAILED" })]}
+        page={1}
+        status={undefined}
+      />,
+    );
+
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.getByText("Ready")).toBeTruthy();
+    expect(screen.getByText("Failed")).toBeTruthy();
   });
 
   it("does not announce progress ticks", async () => {

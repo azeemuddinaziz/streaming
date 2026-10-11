@@ -53,3 +53,19 @@ export function updateInPlace(current: StudioVideo[], polled: StudioVideo[]): St
   const byId = new Map(polled.map((video) => [video.id, video]));
   return current.map((video) => byId.get(video.id) ?? video);
 }
+
+// Videos that were processing and that the poll no longer returns: with a
+// "Processing" filter (or after a delete shifts the page) they have left the
+// list, so their row cannot be updated and the server page must be reloaded.
+export function departedSince(current: StudioVideo[], polled: StudioVideo[]): StudioVideo[] {
+  const present = new Set(polled.map((video) => video.id));
+  return current.filter((video) => video.status === "PROCESSING" && !present.has(video.id));
+}
+
+// The words for a Video that stopped processing, for its toast and for the
+// live region, so the two never differ.
+export function finishedMessage(video: { label: string; status: "READY" | "FAILED" | "GONE" }) {
+  if (video.status === "READY") return `${video.label} is ready`;
+  if (video.status === "FAILED") return `${video.label} could not be processed`;
+  return `${video.label} has finished processing`;
+}

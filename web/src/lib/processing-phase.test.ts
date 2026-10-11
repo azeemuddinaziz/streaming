@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { StudioVideo } from "@/lib/api-client";
-import { finishedSince, hasProcessing, processingSteps, progressView, updateInPlace } from "./processing-phase";
+import {
+  departedSince,
+  finishedMessage,
+  finishedSince,
+  hasProcessing,
+  processingSteps,
+  progressView,
+  updateInPlace,
+} from "./processing-phase";
 
 const video = (id: string, patch: Partial<StudioVideo> = {}): StudioVideo => ({
   id,
@@ -69,5 +77,20 @@ describe("hasProcessing and updateInPlace", () => {
     const current = [video("a"), video("b"), video("c")];
     const next = updateInPlace(current, [video("c", { processingProgress: 9 }), video("a", { processingProgress: 7 })]);
     expect(next.map((v) => [v.id, v.processingProgress])).toEqual([["a", 7], ["b", null], ["c", 9]]);
+  });
+});
+
+describe("departedSince", () => {
+  it("names processing rows the poll no longer returns, not finished ones", () => {
+    const current = [video("a"), video("b"), video("c", { status: "READY" })];
+    expect(departedSince(current, [video("b")]).map((v) => v.id)).toEqual(["a"]);
+  });
+});
+
+describe("finishedMessage", () => {
+  it("has one wording per outcome", () => {
+    expect(finishedMessage({ label: "a.mp4", status: "READY" })).toBe("a.mp4 is ready");
+    expect(finishedMessage({ label: "a.mp4", status: "FAILED" })).toBe("a.mp4 could not be processed");
+    expect(finishedMessage({ label: "a.mp4", status: "GONE" })).toBe("a.mp4 has finished processing");
   });
 });

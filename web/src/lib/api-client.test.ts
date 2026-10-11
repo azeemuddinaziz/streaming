@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   checkApiHealth,
   deleteVideo,
+  fetchStudioPage,
   getChannelPage,
   getChannelVideos,
   deleteComment,
@@ -253,6 +254,25 @@ describe("getStudioPage", () => {
     await new Promise((resolve) => stub!.close(resolve));
     stub = undefined;
     expect(await getStudioPage("token=abc", { page: 1 }, baseUrl)).toEqual({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("fetchStudioPage", () => {
+  it("asks for the page and status from the browser and returns it", async () => {
+    const body = { videos: [], page: 3, hasMore: false, total: 49 };
+    const { baseUrl, requests } = await startRecordingApi(200, body);
+
+    expect(await fetchStudioPage({ page: 3, status: "PROCESSING" }, baseUrl)).toEqual({ ok: true, ...body });
+    expect(requests[0]).toMatchObject({ method: "GET", url: "/api/v1/videos/mine?page=3&status=PROCESSING" });
+  });
+
+  it("tells signed out from unavailable", async () => {
+    const signedOut = await startRecordingApi(401, { msg: "User not Authenticated." });
+    expect(await fetchStudioPage({ page: 1 }, signedOut.baseUrl)).toEqual({ ok: false, reason: "signed-out" });
+
+    await new Promise((resolve) => stub!.close(resolve));
+    const failing = await startRecordingApi(500, { msg: "Something went wrong." });
+    expect(await fetchStudioPage({ page: 1 }, failing.baseUrl)).toEqual({ ok: false, reason: "unavailable" });
   });
 });
 

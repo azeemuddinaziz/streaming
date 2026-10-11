@@ -46,7 +46,7 @@ export function ProcessingPhases({ label, progress }: { label: string; progress:
           {view.determinate ? (
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${view.percent}%` }} />
           ) : (
-            <div className="h-full w-1/3 rounded-full bg-primary motion-safe:animate-pulse" />
+            <div className="h-full w-full rounded-full bg-primary/30 motion-safe:animate-pulse" />
           )}
         </div>
         <span className="min-w-14 text-right text-sm tabular-nums text-muted-foreground">{view.text}</span>

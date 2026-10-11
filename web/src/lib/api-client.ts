@@ -167,18 +167,16 @@ export type StudioPageResult =
   | ({ ok: true } & StudioPage)
   | { ok: false; reason: "signed-out" | "unavailable" };
 
-// For server components: one numbered page of the person's Videos, optionally
-// only those in one processing status.
-export async function getStudioPage(
-  cookie: string,
+async function requestStudioPage(
   query: { page: number; status?: StudioVideo["status"] },
-  baseUrl: string = getApiBaseUrl(),
+  init: RequestInit,
+  baseUrl: string,
 ): Promise<StudioPageResult> {
   const params = new URLSearchParams({ page: String(query.page) });
   if (query.status) params.set("status", query.status);
   try {
     const response = await fetch(`${baseUrl}/api/v1/videos/mine?${params}`, {
-      headers: { Cookie: cookie },
+      ...init,
       cache: "no-store",
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
@@ -192,28 +190,23 @@ export async function getStudioPage(
   }
 }
 
-// For the browser: the same page again, to see processing move. A failure is
-// only "not now"; the caller tries again on its next tick.
-export async function fetchStudioPage(
+// For server components: one numbered page of the person's Videos, optionally
+// only those in one processing status.
+export function getStudioPage(
+  cookie: string,
   query: { page: number; status?: StudioVideo["status"] },
   baseUrl: string = getApiBaseUrl(),
-): Promise<StudioPageResult> {
-  const params = new URLSearchParams({ page: String(query.page) });
-  if (query.status) params.set("status", query.status);
-  try {
-    const response = await fetch(`${baseUrl}/api/v1/videos/mine?${params}`, {
-      credentials: "include",
-      cache: "no-store",
-      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-    });
-    if (response.status === 401) return { ok: false, reason: "signed-out" };
-    if (!response.ok) return { ok: false, reason: "unavailable" };
+) {
+  return requestStudioPage(query, { headers: { Cookie: cookie } }, baseUrl);
+}
 
-    const { videos, page, hasMore, total } = await response.json();
-    return { ok: true, videos, page, hasMore, total };
-  } catch {
-    return { ok: false, reason: "unavailable" };
-  }
+// For the browser: the same page again, to see processing move. A failure is
+// only "not now"; the caller tries again on its next tick.
+export function fetchStudioPage(
+  query: { page: number; status?: StudioVideo["status"] },
+  baseUrl: string = getApiBaseUrl(),
+) {
+  return requestStudioPage(query, { credentials: "include" }, baseUrl);
 }
 
 export function getUnfinishedUploads(cookie: string, baseUrl: string = getApiBaseUrl()) {

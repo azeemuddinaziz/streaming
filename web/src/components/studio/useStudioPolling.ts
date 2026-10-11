@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fetchStudioPage, type StudioVideo } from "@/lib/api-client";
-import { finishedSince, hasProcessing, updateInPlace } from "@/lib/processing-phase";
+import {
+  departedSince,
+  finishedMessage,
+  finishedSince,
+  hasProcessing,
+  updateInPlace,
+} from "@/lib/processing-phase";
 
 export const POLL_INTERVAL_MS = 4000;
 
@@ -15,11 +21,14 @@ type Query = { page: number; status: StudioVideo["status"] | undefined };
 // the tab is visible, and stops when nothing is. Rows change in place; a Video
 // that finishes raises a toast, is returned in `announcement` for a polite
 // live region, and refreshes the server page so counts and filters are right.
+// A Video the poll no longer returns (it left a "Processing" filter) is
+// dropped from the rows and reloaded from the server the same way.
 export function useStudioPolling(initial: StudioVideo[], query: Query, intervalMs = POLL_INTERVAL_MS) {
   const router = useRouter();
   const [videos, setVideos] = useState(initial);
   const [source, setSource] = useState(initial);
   const [announcement, setAnnouncement] = useState("");
+  const announced = useRef(0);
   const current = useRef(videos);
 
   // A fresh server render (after a refresh) replaces what was polled.
@@ -51,23 +60,35 @@ export function useStudioPolling(initial: StudioVideo[], query: Query, intervalM
       inFlight = false;
       if (stopped) return;
 
+      if (!result.ok && result.reason === "signed-out") {
+        // The server page redirects to sign-in; nothing more to poll.
+        router.refresh();
+        return;
+      }
+
       if (result.ok) {
         const before = current.current;
-        const next = updateInPlace(before, result.videos);
+        const departed = departedSince(before, result.videos);
+        const gone = new Set(departed.map((video) => video.id));
+        const next = updateInPlace(before, result.videos).filter((video) => !gone.has(video.id));
         const finished = finishedSince(before, next);
         current.current = next;
         setVideos((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
 
-        if (finished.length > 0) {
+        if (finished.length + departed.length > 0) {
           for (const video of finished) {
-            if (video.status === "READY") toast.success(`${video.label} is ready`);
-            else toast.error(`${video.label} could not be processed`);
+            if (video.status === "READY") toast.success(finishedMessage(video));
+            else toast.error(finishedMessage(video));
           }
-          setAnnouncement(
-            finished
-              .map((video) => `${video.label} ${video.status === "READY" ? "is ready" : "failed to process"}.`)
-              .join(" "),
-          );
+          for (const video of departed) toast(finishedMessage({ label: video.label, status: "GONE" }));
+          const spoken = [
+            ...finished.map(finishedMessage),
+            ...departed.map((video) => finishedMessage({ label: video.label, status: "GONE" })),
+          ];
+          // A trailing non-breaking space on alternate announcements makes a
+          // repeated sentence count as a change, so it is read again.
+          announced.current += 1;
+          setAnnouncement(`${spoken.join(". ")}.${announced.current % 2 ? "" : "\u00a0"}`);
           router.refresh();
         }
       }
