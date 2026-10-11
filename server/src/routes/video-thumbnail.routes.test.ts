@@ -88,7 +88,7 @@ describe("the stable Thumbnail address", () => {
     const response = await api.request(`/videos/${id}/thumbnail`, { redirect: "manual" });
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(`https://bucket.example/${key}?expires=300`);
+    expect(response.headers.get("location")).toBe(`https://bucket.example/${key}?expires=3600`);
     expect(response.headers.get("cache-control")).toBe("public, max-age=300");
   });
 

@@ -3,7 +3,7 @@ import type { WatchVideo } from "./api-client";
 
 // The public address of the web app, read once. Absolute addresses in link
 // previews come from here and never from a request's Host header.
-export const WEB_ORIGIN = process.env.NEXT_PUBLIC_WEB_ORIGIN ?? "http://localhost:3001";
+export const WEB_ORIGIN = (process.env.NEXT_PUBLIC_WEB_ORIGIN ?? "http://localhost:3001").replace(/\/+$/, "");
 
 // What a chat or social post unfurls for a watch page. Only a READY, non-PRIVATE
 // Video offers an image and an address to share; a private one keeps the plain
@@ -11,8 +11,8 @@ export const WEB_ORIGIN = process.env.NEXT_PUBLIC_WEB_ORIGIN ?? "http://localhos
 export function watchMetadata(video: WatchVideo, apiOrigin: string, webOrigin = WEB_ORIGIN): Metadata {
   const title = video.title ?? "Untitled video";
   const description = video.description ?? undefined;
-  const base: Metadata = { title: `${title} · StreamSouk`, description };
   if (video.status !== "READY") return { title: "Watch · StreamSouk" };
+  const base: Metadata = { title: `${title} · StreamSouk`, description };
   if (video.visibility === "PRIVATE") {
     return { ...base, openGraph: { title, description, type: "video.other" } };
   }
