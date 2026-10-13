@@ -58,12 +58,12 @@ describe("shortcutFor", () => {
     expect(shortcutFor("Home", {})).toEqual({ type: "jump", fraction: 0 });
     expect(shortcutFor("End", {})).toEqual({ type: "jump", fraction: 1 });
     expect(shortcutFor("4", {})).toEqual({ type: "jump", fraction: 0.4 });
-    expect(shortcutFor(">", { shift: true })).toEqual({ type: "speed", direction: 1 });
-    expect(shortcutFor("<", { shift: true })).toEqual({ type: "speed", direction: -1 });
-    expect(shortcutFor("?", { shift: true })).toEqual({ type: "help" });
+    expect(shortcutFor(">", {})).toEqual({ type: "speed", direction: 1 });
+    expect(shortcutFor("<", {})).toEqual({ type: "speed", direction: -1 });
+    expect(shortcutFor("?", {})).toEqual({ type: "help" });
   });
   it("is case-insensitive for letters", () => {
-    expect(shortcutFor("K", { shift: true })).toEqual({ type: "toggle" });
+    expect(shortcutFor("K", {})).toEqual({ type: "toggle" });
   });
   it("leaves browser shortcuts and unknown keys alone", () => {
     expect(shortcutFor("f", { ctrl: true })).toBeNull();

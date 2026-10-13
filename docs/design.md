@@ -76,3 +76,7 @@ shadcn/ui components read their own variable names, mapped once in `web/src/app/
 - `globals.css` holds only tokens, the shadcn mapping, resets, base typography, the focus ring and the `prefers-reduced-motion` reset (animations and transitions are cut to nothing). Component styling is Tailwind utilities, never a class rule there.
 - The skip link is the first focusable element; `main` has `id="main"`.
 - Declare `color-scheme: light` for now. Do not hard-code light-only assumptions into components.
+
+## Video player
+
+The watch page player draws its own controls (#90) over the `<video>`: a bar with seek, play, volume, time, speed, quality (hls.js only), shortcuts, picture-in-picture (where supported), theater (from `lg`) and fullscreen. Colors are `foreground`/`background` tokens, the focus ring is the accent ring, and every control has an accessible name (toggles use `aria-pressed`). Menus and the shortcuts dialog are drawn inside the player frame, never portalled, so they stay visible in fullscreen. Controls fade after 3 seconds of playback (never while a menu is open or focus is inside) and the cursor hides with them; the reduced-motion reset removes the fade. Changes are announced in a polite live region.

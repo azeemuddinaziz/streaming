@@ -15,12 +15,12 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { SHORTCUTS, SPEEDS, formatTime } from "@/lib/player-controls";
+import { AUTO_LEVEL, SHORTCUTS, SPEEDS, formatTime, qualityLabel } from "@/lib/player-controls";
 
 const buttonClass =
   "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-background outline-none hover:bg-background/20 focus-visible:ring-[3px] focus-visible:ring-ring [&_svg]:size-5";
 
-export function ControlButton({
+function ControlButton({
   label,
   pressed,
   className,
@@ -61,6 +61,10 @@ function Menu({
   const list = useRef<HTMLDivElement>(null);
   const id = useId();
 
+  function menuItems() {
+    return Array.from(list.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+  }
+
   function setOpenState(next: boolean) {
     setOpen(next);
     onOpenChange(next);
@@ -68,13 +72,12 @@ function Menu({
 
   useEffect(() => {
     if (!open) return;
-    const items = list.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
-    const checked = Array.from(items ?? []).find((el) => el.getAttribute("aria-checked") === "true");
-    (checked ?? items?.[0])?.focus();
+    const items = menuItems();
+    (items.find((el) => el.getAttribute("aria-checked") === "true") ?? items[0])?.focus();
   }, [open]);
 
   function onKeyDown(event: React.KeyboardEvent) {
-    const items = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const items = menuItems();
     const at = items.indexOf(document.activeElement as HTMLElement);
     if (event.key === "Escape") {
       event.preventDefault();
@@ -110,7 +113,7 @@ function Menu({
           role="menu"
           aria-label={label}
           onKeyDown={onKeyDown}
-          className="absolute right-0 bottom-full mb-2 min-w-32 rounded-md border bg-foreground p-1 text-background shadow-md"
+          className="absolute right-0 bottom-full mb-2 max-h-60 min-w-32 overflow-y-auto rounded-md border bg-foreground p-1 text-background shadow-md"
         >
           {options.map((option) => (
             <button
@@ -189,7 +192,7 @@ export function PlayerControls({
   return (
     <div
       className={cn(
-        "absolute inset-x-0 bottom-0 grid gap-1 bg-foreground/80 px-2 pt-1 pb-1.5 text-background transition-opacity",
+        "absolute inset-x-0 bottom-0 grid gap-1 rounded-b-[inherit] bg-foreground/80 px-2 pt-1 pb-1.5 text-background transition-opacity",
         visible ? "opacity-100" : "pointer-events-none opacity-0 focus-within:pointer-events-auto focus-within:opacity-100",
       )}
     >
@@ -241,10 +244,10 @@ export function PlayerControls({
               icon={<Settings />}
               value={String(quality)}
               options={[
-                { value: "-1", label: autoHeight ? `Auto (${autoHeight}p)` : "Auto" },
+                { value: String(AUTO_LEVEL), label: autoHeight ? `Auto (${qualityLabel(autoHeight)})` : "Auto" },
                 ...[...qualities]
                   .sort((a, b) => b.height - a.height)
-                  .map((q) => ({ value: String(q.level), label: `${q.height}p` })),
+                  .map((q) => ({ value: String(q.level), label: qualityLabel(q.height) })),
               ]}
               onSelect={(value) => onQuality(Number(value))}
               onOpenChange={onMenuOpenChange}
@@ -279,13 +282,15 @@ export function ShortcutsHelp({ onClose }: { onClose: () => void }) {
       aria-modal="true"
       aria-label="Keyboard shortcuts"
       onKeyDown={(event) => {
+        // The close button is the only stop, so Tab stays inside.
+        if (event.key === "Tab") event.preventDefault();
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
           onClose();
         }
       }}
-      className="absolute inset-0 grid place-items-center overflow-auto bg-foreground/90 p-4 text-background"
+      className="absolute inset-0 grid place-items-center overflow-auto rounded-[inherit] bg-foreground/90 p-4 text-background"
     >
       <div className="w-full max-w-sm">
         <div className="mb-2 flex items-center justify-between">

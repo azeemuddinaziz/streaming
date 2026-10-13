@@ -1,3 +1,9 @@
+// Seconds the J / L keys and an outer-third double tap move.
+export const LONG_SEEK = 10;
+
+// The hls.js level that means "choose by bandwidth".
+export const AUTO_LEVEL = -1;
+
 export const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 export type ShortcutAction =
@@ -12,7 +18,7 @@ export type ShortcutAction =
   | { type: "speed"; direction: 1 | -1 }
   | { type: "help" };
 
-// What the Player Help dialog lists; keep in step with `shortcutFor`.
+// What the shortcuts help dialog lists; keep in step with `shortcutFor`.
 export const SHORTCUTS: { keys: string; does: string }[] = [
   { keys: "Space or K", does: "Play or pause" },
   { keys: "J / L", does: "Back or forward 10 seconds" },
@@ -52,7 +58,7 @@ export function qualityLabel(height: number): string {
 
 export function shortcutFor(
   key: string,
-  mods: { ctrl?: boolean; meta?: boolean; alt?: boolean; shift?: boolean },
+  mods: { ctrl?: boolean; meta?: boolean; alt?: boolean },
 ): ShortcutAction | null {
   if (mods.ctrl || mods.meta || mods.alt) return null;
   switch (key) {
@@ -62,10 +68,10 @@ export function shortcutFor(
       return { type: "toggle" };
     case "j":
     case "J":
-      return { type: "seek", by: -10 };
+      return { type: "seek", by: -LONG_SEEK };
     case "l":
     case "L":
-      return { type: "seek", by: 10 };
+      return { type: "seek", by: LONG_SEEK };
     case "ArrowLeft":
       return { type: "seek", by: -5 };
     case "ArrowRight":

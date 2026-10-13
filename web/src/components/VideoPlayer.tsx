@@ -3,7 +3,7 @@
 import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { reportView } from "@/lib/api-client";
-import { clamp, shortcutFor, stepSpeed, tapZone, type ShortcutAction } from "@/lib/player-controls";
+import { AUTO_LEVEL, LONG_SEEK, clamp, qualityLabel, shortcutFor, stepSpeed, tapZone, type ShortcutAction } from "@/lib/player-controls";
 import { parseStartTime, startPosition } from "@/lib/share-link";
 import { createViewTracker } from "@/lib/view-tracker";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,8 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
   const video = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const lastTap = useRef<{ time: number; zone: string } | null>(null);
+  const lastTap = useRef<{ time: number; zone: "back" | "middle" | "forward" } | null>(null);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -32,7 +33,7 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
   const [fullscreen, setFullscreen] = useState(false);
   const [theater, setTheater] = useState(false);
   const [qualities, setQualities] = useState<QualityOption[]>([]);
-  const [quality, setQuality] = useState(-1);
+  const [quality, setQuality] = useState(AUTO_LEVEL);
   const [autoHeight, setAutoHeight] = useState<number | null>(null);
   const [active, setActive] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -59,6 +60,9 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
       return () => element.removeEventListener("error", onError);
     }
 
+    setQualities([]);
+    setQuality(AUTO_LEVEL);
+    setAutoHeight(null);
     let stop = () => {};
     let cancelled = false;
     import("hls.js").then(({ default: HlsClass }) => {
@@ -162,8 +166,13 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
   }, []);
   useEffect(() => {
     wake();
-    return () => clearTimeout(hideTimer.current);
+    return () => {
+      clearTimeout(hideTimer.current);
+      clearTimeout(tapTimer.current);
+    };
   }, [wake]);
+
+  const visible = active || !playing || menuOpen || help;
 
   const say = (message: string) => setAnnouncement((previous) => (previous === message ? `${message} ` : message));
 
@@ -191,7 +200,13 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
   function toggleMute() {
     const element = video.current;
     if (!element) return;
-    element.muted = !element.muted;
+    // At volume 0 there is nothing to unmute, so unmuting raises it.
+    if (element.volume === 0) {
+      element.volume = 0.5;
+      element.muted = false;
+    } else {
+      element.muted = !element.muted;
+    }
     say(element.muted ? "Muted" : "Unmuted");
   }
 
@@ -202,10 +217,10 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
   }
 
   function setQualityTo(level: number) {
-    if (hlsRef.current) hlsRef.current.currentLevel = level;
+    if (hlsRef.current) hlsRef.current.nextLevel = level;
     setQuality(level);
     const height = qualities.find((q) => q.level === level)?.height;
-    say(level === -1 ? "Quality automatic" : `Quality ${height}p`);
+    say(level === AUTO_LEVEL || height === undefined ? "Quality automatic" : `Quality ${qualityLabel(height)}`);
   }
 
   function toggleTheater() {
@@ -265,27 +280,41 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
     }
   }
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  function handleKey(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "target" | "preventDefault">) {
     wake();
     const target = event.target as HTMLElement;
     // Menus and the help dialog look after their own keys.
-    if (target.closest('[role="menu"], [role="dialog"]')) return;
-    const action = shortcutFor(event.key, {
-      ctrl: event.ctrlKey,
-      meta: event.metaKey,
-      alt: event.altKey,
-      shift: event.shiftKey,
-    });
+    if (target.closest?.('[role="menu"], [role="dialog"]')) return;
+    const action = shortcutFor(event.key, { ctrl: event.ctrlKey, meta: event.metaKey, alt: event.altKey });
     if (!action) return;
     // A focused slider keeps its arrows, a focused button its Space.
     if (target instanceof HTMLInputElement && target.type === "range" && event.key.startsWith("Arrow")) return;
-    if (target.closest("button") && event.key === " ") return;
+    if (target.closest?.("button") && event.key === " ") return;
     event.preventDefault();
     run(action);
   }
 
-  // A mouse click toggles playback. A touch shows the controls first; a double
-  // tap in the outer thirds seeks 10 seconds that way.
+  // Keys also work with nothing focused (as when the page has just loaded),
+  // so Space plays instead of scrolling. A focused field or button elsewhere is
+  // left alone.
+  const keyHandler = useRef(handleKey);
+  keyHandler.current = handleKey;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.target === document.body && !event.defaultPrevented) keyHandler.current(event);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  function closeHelp() {
+    setHelp(false);
+    frame.current?.focus({ preventScroll: true });
+  }
+
+  // A mouse click toggles playback. On touch, a tap while the controls are
+  // hidden only shows them; a double tap in an outer third seeks instead, so a
+  // single tap there waits to see whether a second one follows.
   function onSurfacePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     frame.current?.focus({ preventScroll: true });
     if (event.pointerType !== "touch") {
@@ -296,19 +325,19 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
     const zone = tapZone(event.clientX - rect.left, rect.width);
     const previous = lastTap.current;
     const now = Date.now();
+    clearTimeout(tapTimer.current);
     if (previous && zone !== "middle" && zone === previous.zone && now - previous.time < DOUBLE_TAP_MS) {
       lastTap.current = null;
-      const by = zone === "back" ? -10 : 10;
+      const by = zone === "back" ? -LONG_SEEK : LONG_SEEK;
       run({ type: "seek", by });
-      say(`${by > 0 ? "Forward" : "Back"} 10 seconds`);
+      say(`${by > 0 ? "Forward" : "Back"} ${LONG_SEEK} seconds`);
       return;
     }
     lastTap.current = { time: now, zone };
-    if (!active) wake();
-    else toggle();
+    const single = () => (visible ? toggle() : wake());
+    if (zone === "middle") single();
+    else tapTimer.current = setTimeout(single, DOUBLE_TAP_MS);
   }
-
-  const visible = active || !playing || menuOpen || help;
 
   return (
     <>
@@ -317,24 +346,22 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
         tabIndex={-1}
         role="group"
         aria-label={`Video player: ${label}`}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKey}
         onPointerMove={wake}
         onFocus={wake}
         className={cn(
-          "relative mx-auto aspect-video w-full overflow-hidden rounded-lg bg-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring",
+          "relative mx-auto aspect-video w-full rounded-lg bg-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring",
           !theater && "max-w-5xl",
-          fullscreen && "max-w-none rounded-none",
+          fullscreen && "h-full max-w-none rounded-none",
+          playing && !visible && "cursor-none",
         )}
       >
         <video
           ref={video}
-          className="player size-full"
+          className="player size-full rounded-[inherit]"
           playsInline
           preload="metadata"
           aria-label={label}
-          onDoubleClick={() => {
-            if (!window.matchMedia?.("(pointer: coarse)").matches) toggleFullscreen();
-          }}
         />
         <div className="absolute inset-0 bottom-20" onPointerUp={onSurfacePointerUp} aria-hidden />
         <PlayerControls
@@ -359,7 +386,7 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
           onMenuOpenChange={setMenuOpen}
           state={{ time, duration, volume, muted, speed }}
         />
-        {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
+        {help && <ShortcutsHelp onClose={closeHelp} />}
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}
         </p>

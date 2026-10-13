@@ -3,13 +3,13 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const hls = vi.hoisted(() => ({ instance: null as null | { currentLevel: number; levels: { height: number }[] } }));
+const hls = vi.hoisted(() => ({ instance: null as null | { nextLevel: number; levels: { height: number }[] } }));
 
 vi.mock("hls.js", () => {
   class FakeHls {
     static isSupported = () => true;
     static Events = { ERROR: "e", MANIFEST_PARSED: "m", LEVEL_SWITCHED: "l" };
-    currentLevel = -1;
+    nextLevel = -1;
     levels = [{ height: 360 }, { height: 720 }, { height: 1080 }];
     handlers: Record<string, (...args: unknown[]) => void> = {};
     constructor() {
@@ -103,7 +103,7 @@ describe("VideoPlayer", () => {
     expect(items.map((el) => el.textContent?.replace("✓", ""))).toEqual(["Auto", "1080p", "720p", "360p"]);
     expect(items[0]).toHaveAttribute("aria-checked", "true");
     await user.click(screen.getByRole("menuitemradio", { name: "720p" }));
-    expect(hls.instance?.currentLevel).toBe(1);
+    expect(hls.instance?.nextLevel).toBe(1);
   });
 
   it("closes a menu on Escape and returns focus to its button", async () => {
@@ -129,5 +129,20 @@ describe("VideoPlayer", () => {
     await user.click(screen.getByRole("button", { name: "Theater mode" }));
     expect(localStorage.getItem("player-theater")).toBe("1");
     expect(screen.getByRole("button", { name: "Theater mode" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("plays on Space when nothing on the page is focused", async () => {
+    const { user } = await setup();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard(" ");
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("raises the volume when unmuting at volume 0", async () => {
+    const { user, video } = await setup();
+    video.volume = 0;
+    await user.click(screen.getByRole("button", { name: "Mute" }));
+    expect(video.volume).toBe(0.5);
+    expect(video.muted).toBe(false);
   });
 });
