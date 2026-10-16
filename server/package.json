@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "worker": "tsx watch src/worker.ts",
+    "seed": "tsx src/seed.ts",
     "tusd": "sh scripts/tusd.sh",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
