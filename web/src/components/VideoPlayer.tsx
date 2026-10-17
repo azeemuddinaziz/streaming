@@ -346,6 +346,8 @@ export function VideoPlayer({ src, label, videoId }: { src: string; label: strin
         tabIndex={-1}
         role="group"
         aria-label={`Video player: ${label}`}
+        // The watch page reads this (CSS :has) to put the player above both columns.
+        data-theater={theater || undefined}
         onKeyDown={handleKey}
         onPointerMove={wake}
         onFocus={wake}

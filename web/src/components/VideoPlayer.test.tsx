@@ -131,6 +131,16 @@ describe("VideoPlayer", () => {
     expect(screen.getByRole("button", { name: "Theater mode" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("marks its frame in theater mode so the watch page can lay out around it", async () => {
+    const { user } = await setup();
+    const frame = screen.getByRole("group", { name: /Video player/ });
+    expect(frame).not.toHaveAttribute("data-theater");
+    await user.click(screen.getByRole("button", { name: "Theater mode" }));
+    expect(frame).toHaveAttribute("data-theater");
+    await user.click(screen.getByRole("button", { name: "Theater mode" }));
+    expect(frame).not.toHaveAttribute("data-theater");
+  });
+
   it("plays on Space when nothing on the page is focused", async () => {
     const { user } = await setup();
     (document.activeElement as HTMLElement | null)?.blur();

@@ -10,6 +10,7 @@ import { SuggestedVideosSkeleton } from "@/components/skeletons";
 import { SubscribeButton } from "@/components/SubscribeButton";
 import { SuggestedVideos } from "@/components/SuggestedVideos";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { WatchLayout } from "@/components/WatchLayout";
 import { PrivateBadge, WatchNotice } from "@/components/WatchNotice";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
 import { watchMetadata } from "@/lib/share-metadata";
@@ -50,80 +51,91 @@ export default async function WatchPage({ params }: Props) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
 
   return (
-    <article className="grid gap-4 pb-8">
-      {playable ? (
-        <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} videoId={video.id} />
-      ) : (
-        <WatchNotice kind={video.status === "FAILED" ? "failed" : "processing"} />
-      )}
-
-      <div className="grid gap-2">
-        <h1 className="font-sans text-xl font-semibold break-words sm:text-2xl">{title}</h1>
-        {video.visibility === "PRIVATE" && (
-          <div>
-            <PrivateBadge />
+    <WatchLayout
+      player={
+        playable ? (
+          <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} videoId={video.id} />
+        ) : (
+          <WatchNotice kind={video.status === "FAILED" ? "failed" : "processing"} />
+        )
+      }
+      details={
+        <>
+          <div className="grid gap-2">
+            <h1 className="font-sans text-xl font-semibold break-words sm:text-2xl">{title}</h1>
+            {video.visibility === "PRIVATE" && (
+              <div>
+                <PrivateBadge />
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Link
-            className="font-medium hover:underline"
-            href={`/channels/${encodeURIComponent(video.channelName)}`}
-          >
-            {video.channelName}
-          </Link>
-          <SubscribeButton
-            channelName={video.channelName}
-            signedIn={user !== null}
-            isOwner={video.isOwner}
-            subscribers={video.subscribers}
-            subscribed={video.subscribed === true}
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link
+                className="font-medium hover:underline"
+                href={`/channels/${encodeURIComponent(video.channelName)}`}
+              >
+                {video.channelName}
+              </Link>
+              <SubscribeButton
+                channelName={video.channelName}
+                signedIn={user !== null}
+                isOwner={video.isOwner}
+                subscribers={video.subscribers}
+                subscribed={video.subscribed === true}
+              />
+            </div>
+            {ready && (
+              <div className="flex flex-wrap items-center gap-2">
+                <ReactionButtons
+                  videoId={video.id}
+                  signedIn={signedIn}
+                  likes={video.likes}
+                  dislikes={video.dislikes}
+                  myReaction={video.myReaction}
+                />
+                <ShareButton subject="video" title={title} withStartTime privateVideo={video.visibility === "PRIVATE"} />
+              </div>
+            )}
+          </div>
+
+          <DescriptionBox
+            views={video.views}
+            date={new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
+            description={video.description}
           />
-        </div>
-        {ready && (
-          <div className="flex flex-wrap items-center gap-2">
-            <ReactionButtons
-              videoId={video.id}
-              signedIn={signedIn}
-              likes={video.likes}
-              dislikes={video.dislikes}
-              myReaction={video.myReaction}
-            />
-            <ShareButton subject="video" title={title} withStartTime privateVideo={video.visibility === "PRIVATE"} />
-          </div>
-        )}
-      </div>
-
-      <DescriptionBox
-        views={video.views}
-        date={new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
-        description={video.description}
-      />
-
-      {playable && (
-        <Suspense fallback={<SuggestedVideosSkeleton />}>
-          <SuggestedVideos currentId={video.id} />
-        </Suspense>
-      )}
-
-      {ready && !video.commentsEnabled && (
-        <p className="rounded-lg border bg-card p-4 text-sm" role="status">
-          {video.isOwner
-            ? "Comments are turned off for this video. Only you can see the existing ones. Turn them back on in your studio."
-            : "Comments are turned off for this video."}
-        </p>
-      )}
-      {ready && (video.commentsEnabled || video.isOwner) && (
-        <CommentSection
-          videoId={video.id}
-          initialCount={video.comments ?? 0}
-          signedIn={signedIn}
-          isOwner={video.isOwner}
-          commentsEnabled={video.commentsEnabled}
-        />
-      )}
-    </article>
+        </>
+      }
+      suggested={
+        playable ? (
+          <Suspense fallback={<SuggestedVideosSkeleton />}>
+            <SuggestedVideos currentId={video.id} />
+          </Suspense>
+        ) : undefined
+      }
+      comments={
+        ready ? (
+          <>
+            {!video.commentsEnabled && (
+              <p className="rounded-lg border bg-card p-4 text-sm" role="status">
+                {video.isOwner
+                  ? "Comments are turned off for this video. Only you can see the existing ones. Turn them back on in your studio."
+                  : "Comments are turned off for this video."}
+              </p>
+            )}
+            {(video.commentsEnabled || video.isOwner) && (
+              <CommentSection
+                videoId={video.id}
+                initialCount={video.comments ?? 0}
+                signedIn={signedIn}
+                isOwner={video.isOwner}
+                commentsEnabled={video.commentsEnabled}
+              />
+            )}
+          </>
+        ) : undefined
+      }
+    />
   );
 }
