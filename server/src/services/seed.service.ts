@@ -1,6 +1,6 @@
 import { hashPassword } from "../utils/password.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
-import { SeedRepository } from "../repositories/seed.repository.ts";
+import { DEMO_EMAIL_DOMAIN, SeedRepository } from "../repositories/seed.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 import { HttpError } from "../errors.ts";
 import { CommentService } from "./comments.service.ts";
@@ -20,10 +20,10 @@ export const DEMO_PASSWORD = "demo-password";
 export const SEED_TUS_PREFIX = "seed-demo-";
 
 const demoName = (n: number) => `demo-user-${n}`;
-const demoEmail = (n: number) => `demo-user-${n}@seed.streamsouk.local`;
+const demoEmail = (n: number) => `demo-user-${n}${DEMO_EMAIL_DOMAIN}`;
 const tusIdFor = (n: number) => `${SEED_TUS_PREFIX}${n}`;
 
-export type SeedOptions = { users: number; videos: number; commentsPerVideo?: number };
+export type SeedOptions = { users: number; videos: number; commentsPerVideo: number };
 
 export type SeedDeps = {
   // Puts a generated clip in upload storage under `tusId`; returns its size in bytes.
@@ -42,13 +42,20 @@ export type SeedDeps = {
 export const WAIT_POLL_MS = 3_000;
 export const WAIT_TIMEOUT_MS = 5 * 60_000;
 
+const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const seededNumber = (tusId: string) => Number(tusId.slice(SEED_TUS_PREFIX.length));
+// Replies under the k-th top-level Comment: two on k = 1, 5, ..., one on k = 3, 7, ...
+const repliesFor = (k: number) => (k % 4 === 1 ? 2 : k % 4 === 3 ? 1 : 0);
+// A write refused this many times in a row is not going to pass.
+const MAX_RATE_LIMIT_WAITS = 20;
+
 const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 const noun = (n: number) => `${n} Video${n === 1 ? "" : "s"}`;
 
 const FLAGS = { "--users": "users", "--videos": "videos", "--comments-per-video": "commentsPerVideo" } as const;
 
-export function parseSeedArgs(argv: string[]): Required<SeedOptions> {
-  const options: Required<SeedOptions> = {
+export function parseSeedArgs(argv: string[]): SeedOptions {
+  const options: SeedOptions = {
     users: SEED_LIMITS.users.default,
     videos: SEED_LIMITS.videos.default,
     commentsPerVideo: SEED_LIMITS.commentsPerVideo.default,
@@ -110,20 +117,23 @@ const REPLIES = [
 ];
 
 // Writes `text` through the Comment service, waiting out the write limit.
-// Returns false when this author already wrote that text there.
+// A demo User already having written that text there counts as written.
 async function writeComment(
   deps: SeedDeps,
   c: { videoId: string; authorId: string; text: string; parentId: string | null },
 ): Promise<{ id: string; written: boolean }> {
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const found = await SeedRepository.findComment(c.videoId, c.authorId, c.text, c.parentId);
+  const sleep = deps.sleep ?? defaultSleep;
+  const found = await SeedRepository.findComment(c.videoId, c.text, c.parentId);
   if (found) return { id: found.id, written: false };
-  for (;;) {
+  for (let waits = 0; ; waits++) {
     try {
       const made = await CommentService.create(c.authorId, c.videoId, c.text, c.parentId);
       return { id: made.id, written: true };
     } catch (error) {
       if (!(error instanceof HttpError) || error.status !== 429) throw error;
+      if (waits >= MAX_RATE_LIMIT_WAITS) {
+        throw new SeedError("The comment rate limit keeps refusing writes. Run the seed again later to continue.");
+      }
       const seconds = Number(error.headers["Retry-After"]) || 60;
       deps.log(`  comment rate limit reached, waiting ${seconds}s`);
       await sleep(seconds * 1000);
@@ -136,7 +146,7 @@ async function writeComment(
 // the first and re-queues the second.
 async function waitForReady(videoIds: string[], deps: SeedDeps) {
   const { log } = deps;
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep = deps.sleep ?? defaultSleep;
   const now = deps.now ?? Date.now;
   const pollMs = deps.pollMs ?? WAIT_POLL_MS;
   const timeoutMs = deps.timeoutMs ?? WAIT_TIMEOUT_MS;
@@ -168,7 +178,7 @@ async function waitForReady(videoIds: string[], deps: SeedDeps) {
   }
 }
 
-export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.commentsPerVideo.default }: SeedOptions, deps: SeedDeps): Promise<SeedSummary> {
+export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, deps: SeedDeps): Promise<SeedSummary> {
   const { log } = deps;
   log(`Seeding demo data: ${users} demo Users, ${videos} Videos (one in 6 Unlisted, the rest Public), ${commentsPerVideo} Comments each.`);
 
@@ -261,7 +271,7 @@ export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.co
   log("[3/5] Processing");
   await waitForReady(
     (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
-      .filter((u) => Number(u.tusId.slice(SEED_TUS_PREFIX.length)) <= videos && u.video && !u.video.deletedAt)
+      .filter((u) => seededNumber(u.tusId) <= videos && u.video && !u.video.deletedAt)
       .map((u) => u.video!.id),
     deps,
   );
@@ -269,11 +279,11 @@ export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.co
   // 4. Comments and Replies on the READY Videos, through the real service.
   log("[4/5] Comments");
   const ready = (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
-    .filter((u) => Number(u.tusId.slice(SEED_TUS_PREFIX.length)) <= videos && u.video?.status === "READY" && !u.video.deletedAt)
-    .sort((x, y) => Number(x.tusId.slice(SEED_TUS_PREFIX.length)) - Number(y.tusId.slice(SEED_TUS_PREFIX.length)));
+    .filter((u) => seededNumber(u.tusId) <= videos && u.video?.status === "READY" && !u.video.deletedAt)
+    .sort((x, y) => seededNumber(x.tusId) - seededNumber(y.tusId));
   const tally = (r: { written: boolean }) => void (r.written ? summary.commentsWritten++ : summary.commentsFound++);
   for (const upload of ready) {
-    const n = Number(upload.tusId.slice(SEED_TUS_PREFIX.length));
+    const n = seededNumber(upload.tusId);
     const videoId = upload.video!.id;
     for (let k = 0; k < commentsPerVideo; k++) {
       const authorIndex = (n + k) % owners.length;
@@ -281,8 +291,8 @@ export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.co
         videoId, authorId: owners[authorIndex]!.id, text: COMMENTS[(n + k) % COMMENTS.length]!, parentId: null,
       });
       tally(top);
-      // A Reply on every second Comment, two on every fourth, from the next User.
-      for (let r = 0; r < (k % 4 === 0 ? 2 : k % 2 === 0 ? 1 : 0); r++) {
+      // Replies come from the next User; a lone User does not answer themself.
+      for (let r = 0; r < (owners.length > 1 ? repliesFor(k) : 0); r++) {
         tally(await writeComment(deps, {
           videoId, authorId: owners[(authorIndex + 1 + r) % owners.length]!.id,
           text: REPLIES[(n + k + r) % REPLIES.length]!, parentId: top.id,
@@ -295,7 +305,7 @@ export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.co
   // 5. Summary
   log("[5/5] Done");
   log(`  Users: ${summary.usersCreated} created, ${summary.usersFound} found`);
-  log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} found`);
+  log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} already there`);
   log(`  Videos: ${summary.videosCreated} created, ${summary.videosFound} found`);
   if (summary.videosCreated + summary.usersCreated + summary.commentsWritten === 0) log("  Nothing new was created.");
   log(`Demo sign-in (local only), password "${DEMO_PASSWORD}":`);
