@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { cache } from "react";
+import { cache, Suspense } from "react";
 import { CommentSection } from "@/components/comments/CommentSection";
 import { DescriptionBox } from "@/components/DescriptionBox";
 import { ReactionButtons } from "@/components/ReactionButtons";
 import { ShareButton } from "@/components/ShareButton";
+import { SuggestedVideosSkeleton } from "@/components/skeletons";
 import { SubscribeButton } from "@/components/SubscribeButton";
+import { SuggestedVideos } from "@/components/SuggestedVideos";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { PrivateBadge, WatchNotice } from "@/components/WatchNotice";
 import { getApiBaseUrl, getCurrentUser, getWatchVideo } from "@/lib/api-client";
@@ -40,6 +42,8 @@ export default async function WatchPage({ params }: Props) {
   const { video } = result;
   const user = await getCurrentUser((await cookies()).toString());
   const ready = video.status === "READY";
+  // Suggested videos sit only beside a real player, never beside a WatchNotice.
+  const playable = ready && Boolean(video.playlistPath);
   const signedIn = ready && user !== null;
   const title = video.title ?? "Untitled video";
   // The browser reaches the API at the public address, not the server-side one.
@@ -47,7 +51,7 @@ export default async function WatchPage({ params }: Props) {
 
   return (
     <article className="grid gap-4 pb-8">
-      {ready && video.playlistPath ? (
+      {playable ? (
         <VideoPlayer src={`${apiUrl}${video.playlistPath}`} label={title} videoId={video.id} />
       ) : (
         <WatchNotice kind={video.status === "FAILED" ? "failed" : "processing"} />
@@ -97,6 +101,12 @@ export default async function WatchPage({ params }: Props) {
         date={new Date(video.createdAt).toLocaleDateString("en", { dateStyle: "medium" })}
         description={video.description}
       />
+
+      {playable && (
+        <Suspense fallback={<SuggestedVideosSkeleton />}>
+          <SuggestedVideos currentId={video.id} />
+        </Suspense>
+      )}
 
       {ready && !video.commentsEnabled && (
         <p className="rounded-lg border bg-card p-4 text-sm" role="status">
