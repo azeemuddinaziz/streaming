@@ -7,26 +7,13 @@ type CardVideo = { id: string; title: string | null; createdAt: string; thumbnai
 // A Video in a grid: its Thumbnail and title link to the watch page, and the
 // Channel name, when shown, links to the Channel page.
 export function VideoCard({ video, channelName }: { video: CardVideo; channelName?: string }) {
-  // The browser reaches the API at the public address, not the server-side one.
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
-
   return (
     <li className="group grid content-start gap-2">
       <Link
         href={`/watch/${video.id}`}
         className="grid gap-2 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2"
       >
-        <span className="block aspect-video overflow-hidden rounded-lg border bg-border">
-          {video.thumbnailPath && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="size-full object-cover transition-transform group-hover:scale-[1.02]"
-              src={`${apiUrl}${video.thumbnailPath}`}
-              alt=""
-              loading="lazy"
-            />
-          )}
-        </span>
+        <VideoThumbnail path={video.thumbnailPath} />
         <strong className="line-clamp-2 font-medium group-hover:text-primary">
           {video.title ?? "Untitled video"}
         </strong>
@@ -40,24 +27,12 @@ export function VideoCard({ video, channelName }: { video: CardVideo; channelNam
 // the text. The Thumbnail repeats the title's link, so it is left out of the tab
 // order and the accessibility tree.
 export function VideoRow({ video, channelName }: { video: CardVideo; channelName?: string }) {
-  // The browser reaches the API at the public address, not the server-side one.
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
   const href = `/watch/${video.id}`;
 
   return (
     <li className="group flex min-w-0 gap-3">
       <Link href={href} tabIndex={-1} aria-hidden="true" className="w-36 shrink-0 sm:w-40">
-        <span className="block aspect-video overflow-hidden rounded-lg border bg-border">
-          {video.thumbnailPath && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="size-full object-cover transition-transform group-hover:scale-[1.02]"
-              src={`${apiUrl}${video.thumbnailPath}`}
-              alt=""
-              loading="lazy"
-            />
-          )}
-        </span>
+        <VideoThumbnail path={video.thumbnailPath} />
       </Link>
       <div className="grid min-w-0 content-start gap-1">
         <Link
@@ -74,10 +49,30 @@ export function VideoRow({ video, channelName }: { video: CardVideo; channelName
   );
 }
 
+// The 16:9 frame, with the Thumbnail when there is one. Decorative: the title names the link.
+function VideoThumbnail({ path }: { path: string | null }) {
+  // The browser reaches the API at the public address, not the server-side one.
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? getApiBaseUrl();
+
+  return (
+    <span className="block aspect-video overflow-hidden rounded-lg border bg-border">
+      {path && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className="size-full object-cover transition-transform group-hover:scale-[1.02]"
+          src={`${apiUrl}${path}`}
+          alt=""
+          loading="lazy"
+        />
+      )}
+    </span>
+  );
+}
+
 // The Channel name (linked, when shown) and the relative date under a Video's title.
 function VideoMeta({ video, channelName }: { video: CardVideo; channelName?: string }) {
   return (
-    <span className="text-sm text-muted-foreground">
+    <span className="text-sm break-words text-muted-foreground">
       {channelName && (
         <>
           <Link

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { VideoRow } from "@/components/VideoCard";
 import { getSuggestedVideos } from "@/lib/suggested-videos";
@@ -11,14 +10,15 @@ export async function SuggestedVideos({ currentId }: { currentId: string }) {
 
   return (
     <section aria-labelledby="suggested-videos-heading" className="grid content-start gap-3">
-      <h2 id="suggested-videos-heading" className="font-sans text-lg font-semibold">
+      <h2 id="suggested-videos-heading" className="font-sans text-xl font-semibold">
         Suggested videos
       </h2>
       {!result.ok ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4 text-sm">
           <p>Couldn&apos;t load suggestions.</p>
           <Button asChild variant="outline" size="sm">
-            <Link href={`/watch/${currentId}`}>Try again</Link>
+            {/* A full load, so the API is asked again rather than a cached client route reused. */}
+            <a href={`/watch/${currentId}`}>Try again</a>
           </Button>
         </div>
       ) : result.videos.length === 0 ? (

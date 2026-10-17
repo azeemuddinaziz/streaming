@@ -89,5 +89,5 @@ The address of a Video's watch page, or of a Channel's page, that a person copie
 _Avoid_: Share (as a counted thing), embed, repost
 
 **Suggested videos**:
-The other Videos offered to a Viewer beside the Video they are watching, so they can keep watching. Only Videos the Viewer could open from the home page are offered, never the one being watched. The term says nothing about how they are chosen.
+The other Videos offered to a Viewer beside the Video they are watching, so they can keep watching; never the one being watched. The term says nothing about how they are chosen.
 _Avoid_: Related videos, recommendations (as a name for the list), up next
