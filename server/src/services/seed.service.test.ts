@@ -19,7 +19,15 @@ function deps() {
     storeClip: async (tusId: string) => (stored.push(tusId), 1234),
     queue: async (id: string) => void queued.push(id),
     log: (line: string) => void logs.push(line),
+    // Stands in for the worker: each wait makes every processing Video ready.
+    sleep: async () => void (await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } })),
   };
+}
+
+// A clock that moves only when the seed sleeps, so a timeout takes no real time.
+function fakeClock() {
+  let t = 0;
+  return { now: () => t, sleep: async (ms: number) => void (t += ms) };
 }
 
 describe("parseSeedArgs", () => {
@@ -73,7 +81,7 @@ describe("runSeed", () => {
     expect(videos.filter((v) => v.visibility === "UNLISTED")).toHaveLength(1);
     expect(videos.filter((v) => v.visibility === "PUBLIC")).toHaveLength(5);
     for (const v of videos) {
-      expect(v.status).toBe("PROCESSING");
+      expect(v.status).toBe("READY");
       expect(v.title && v.description).toBeTruthy();
       expect(v.title).not.toBe(v.upload!.filename);
       expect(v.upload!.completedAt).not.toBeNull();
@@ -132,8 +140,50 @@ describe("runSeed", () => {
 
   it("marks a Video failed when queueing fails", async () => {
     const d = { ...deps(), queue: async () => { throw new Error("down"); } };
-    await runSeed({ users: 1, videos: 1 }, d);
+    await expect(runSeed({ users: 1, videos: 1 }, d)).rejects.toThrow(/1 Video failed/);
     expect((await prisma.video.findFirstOrThrow()).status).toBe("FAILED");
+  });
+});
+
+describe("runSeed waiting", () => {
+  it("reports progress and ends with all ready", async () => {
+    const d = deps();
+    await runSeed({ users: 1, videos: 2 }, { ...d, ...fakeClock(), sleep: async () => {
+      await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } });
+    } });
+    expect(d.logs.join("\n")).toMatch(/0\/2 ready, 2 processing, elapsed 0:00/);
+    expect(d.logs.join("\n")).toContain("all ready (2/2)");
+  });
+
+  it("times out when nothing processes, then a re-run waits on the same Videos without re-queueing", async () => {
+    const stuck = { ...deps(), ...fakeClock(), timeoutMs: 15_000, pollMs: 5_000 };
+    await expect(runSeed({ users: 1, videos: 2 }, stuck)).rejects.toThrow(
+      "2 Videos still processing. Is the worker running? Run the seed again to continue.",
+    );
+    expect(stuck.logs.join("\n")).toContain("elapsed 0:15");
+
+    const d = deps();
+    await runSeed({ users: 1, videos: 2 }, d);
+    expect(d.queued).toEqual([]);
+    expect(await prisma.video.count({ where: { status: "READY" } })).toBe(2);
+  });
+
+  it("re-queues a FAILED Video on the next run and ends ready", async () => {
+    await runSeed({ users: 1, videos: 2 }, deps());
+    const failed = await prisma.video.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
+    await prisma.video.update({ where: { id: failed.id }, data: { status: "FAILED", processingProgress: 40 } });
+
+    const d = deps();
+    await runSeed({ users: 1, videos: 2 }, d);
+    expect(d.queued).toEqual([failed.id]);
+    expect(d.logs.join("\n")).toContain("was Failed, processing queued again");
+    const after = await prisma.video.findUniqueOrThrow({ where: { id: failed.id } });
+    expect(after.status).toBe("READY");
+  });
+
+  it("stops with a message when a Video fails while waiting", async () => {
+    const d = { ...deps(), sleep: async () => void (await prisma.video.updateMany({ data: { status: "FAILED" } })) };
+    await expect(runSeed({ users: 1, videos: 2 }, d)).rejects.toThrow(/2 Videos failed to process/);
   });
 });
 

@@ -13,7 +13,18 @@ export class SeedRepository {
 
   // Uploads recorded by the seed, found by the prefix of their tusd id.
   static async findSeededUploads(prefix: string) {
-    return await prisma.upload.findMany({ where: { tusId: { startsWith: prefix } } });
+    return await prisma.upload.findMany({
+      where: { tusId: { startsWith: prefix } },
+      include: { video: { select: { id: true, status: true, deletedAt: true } } },
+    });
+  }
+
+  // The processing status of each of these Videos that is not deleted.
+  static async statusesOf(videoIds: string[]) {
+    return await prisma.video.findMany({
+      where: { id: { in: videoIds }, deletedAt: null },
+      select: { id: true, status: true },
+    });
   }
 
   // Records a finished Upload and the Video made from it, like `post-finish`
