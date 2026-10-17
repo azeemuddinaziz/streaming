@@ -1,5 +1,7 @@
 import { LoadingRegion, SuggestedVideosSkeleton } from "@/components/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WATCH_COLUMNS_CLASS } from "@/components/WatchLayout";
+import { cn } from "@/lib/utils";
 
 // Mirrors the watch page: player, title, Channel row with actions, description
 // box, and from lg the Suggested videos column on the right.
@@ -7,7 +9,7 @@ export default function Loading() {
   return (
     <LoadingRegion
       label="Loading video"
-      className="grid gap-4 pb-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-x-6"
+      className={cn("grid gap-4 pb-8 lg:items-start", WATCH_COLUMNS_CLASS)}
     >
       <div className="grid min-w-0 gap-4">
         <Skeleton className="aspect-video w-full" />

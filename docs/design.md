@@ -58,6 +58,7 @@ shadcn/ui components read their own variable names, mapped once in `web/src/app/
 
 - Desktop: a top bar (logo, a prominent Upload button when signed in, an avatar menu holding the account name and Sign out) and a left sidebar (Home, Subscriptions, Studio). On the watch page the sidebar is an overlay opened by a hamburger so the player gets the width. The collapsed state is kept in a cookie.
 - Phones (below about 768px): a top bar with the logo and the avatar menu, and a bottom bar (signed in: Home, Subscriptions, a centred Upload, Studio; signed out: Home, Sign in) that hides in fullscreen and while the keyboard is open.
+- Watch page from `lg`: the main column (player, details, Comments) and a 400px Suggested videos column on the right, sticky under the top bar and scrolling on its own when taller than the screen. In theater mode the player spans both columns. Below `lg` everything is one column, Suggested videos between the description and the Comments.
 - Signed out, Studio and Subscriptions are hidden, not disabled. The active destination carries `aria-current="page"`.
 - The top bar keeps room for a future search field.
 
