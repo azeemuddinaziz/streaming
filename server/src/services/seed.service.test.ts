@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../lib/prisma.ts";
 import { storeDemoClip } from "../lib/seed-clip.ts";
+import { ReactionService } from "./reactions.service.ts";
+import { VideoService } from "./videos.service.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase } from "../test/helpers.ts";
 import { checkSeedEnvironment, parseSeedArgs, runSeed, SeedError } from "./seed.service.ts";
@@ -297,6 +299,31 @@ describe("runSeed reactions and subscriptions", () => {
     expect([await prisma.reaction.count(), await prisma.subscription.count()]).toEqual(before);
   });
 
+  it("leaves existing Reactions alone when the number of Users changes", async () => {
+    await runSeed({ users: 2, videos: 3, commentsPerVideo: 2 }, deps());
+    const before = await prisma.reaction.findMany({ orderBy: { id: "asc" } });
+    await runSeed({ users: 3, videos: 3, commentsPerVideo: 3 }, deps());
+    const after = await prisma.reaction.findMany({ where: { id: { in: before.map((r) => r.id) } }, orderBy: { id: "asc" } });
+    expect(after.map((r) => r.kind)).toEqual(before.map((r) => r.kind));
+  });
+
+  it("shows the owner Dislikes in the Studio list, and Viewers only Likes", async () => {
+    await runSeed({ users: 3, videos: 5, commentsPerVideo: 0 }, deps());
+    const owners = await prisma.user.findMany({ include: { channel: true } });
+    let ownerSawDislike = false;
+    for (const o of owners) {
+      for (const v of (await VideoService.listStudio(o.id, 1, undefined)).videos) {
+        if (v.dislikes > 0) ownerSawDislike = true;
+        expect(v.likes).toBeGreaterThan(0);
+      }
+    }
+    expect(ownerSawDislike).toBe(true);
+    const video = await prisma.video.findFirstOrThrow({ include: { channel: true } });
+    const viewer = owners.find((u) => u.id !== video.channel.userId)!;
+    const seen = await ReactionService.set(viewer.id, video.id, "LIKE");
+    expect(seen).not.toHaveProperty("dislikes");
+  });
+
   it("writes no Reactions and no Subscriptions with a single User", async () => {
     const d = deps();
     const summary = await runSeed({ users: 1, videos: 2, commentsPerVideo: 1 }, d);
@@ -307,7 +334,7 @@ describe("runSeed reactions and subscriptions", () => {
 
   it("waits out the Reaction write limit", async () => {
     const d = deps();
-    // The limit is per User: 2 Users each react to over 30 things Reactions in a minute.
+    // The limit is per User: with 2 Users each reacts to over 30 things Reactions in a minute.
     await runSeed({ users: 2, videos: 4, commentsPerVideo: 10 }, {
       ...d,
       sleep: async () => {

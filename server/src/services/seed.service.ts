@@ -337,7 +337,8 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
       const had = target.commentId
         ? await ReactionRepository.findOnComment(userId, target.commentId)
         : await ReactionRepository.find(userId, target.videoId!);
-      if (had === kind) {
+      // Any Reaction already there stays, so a changed --users cannot flip Likes to Dislikes.
+      if (had) {
         summary.reactionsFound++;
         continue;
       }
