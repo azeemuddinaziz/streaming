@@ -1,6 +1,9 @@
 import type { Visibility } from "../../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 
+// Every demo User's email ends with this.
+export const DEMO_EMAIL_DOMAIN = "@seed.streamsouk.local";
+
 export class SeedRepository {
   // The Users whose account name (any case) is one of `names`.
   static async findUsersByName(nameKeys: string[]) {
@@ -59,6 +62,16 @@ export class SeedRepository {
         },
       });
       return video;
+    });
+  }
+
+  // A Comment a demo User already wrote with exactly this text in this place
+  // (top level when parentId is null), whatever has happened to it since. The
+  // author is not matched, so changing the number of Users cannot add duplicates.
+  static async findComment(videoId: string, body: string, parentId: string | null) {
+    return await prisma.comment.findFirst({
+      where: { videoId, body, parentId, author: { email: { endsWith: DEMO_EMAIL_DOMAIN } } },
+      select: { id: true },
     });
   }
 

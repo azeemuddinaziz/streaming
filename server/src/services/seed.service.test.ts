@@ -20,7 +20,11 @@ function deps() {
     queue: async (id: string) => void queued.push(id),
     log: (line: string) => void logs.push(line),
     // Stands in for the worker: each wait makes every processing Video ready.
-    sleep: async () => void (await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } })),
+    // It also lets time pass for the Comment write limit.
+    sleep: async () => {
+      await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } });
+      await prisma.comment.updateMany({ data: { createdAt: new Date(Date.now() - 2 * 60_000) } });
+    },
   };
 }
 
@@ -32,10 +36,10 @@ function fakeClock() {
 
 describe("parseSeedArgs", () => {
   it("defaults to 3 Users and 6 Videos", () => {
-    expect(parseSeedArgs([])).toEqual({ users: 3, videos: 6 });
+    expect(parseSeedArgs([])).toEqual({ users: 3, videos: 6, commentsPerVideo: 2 });
   });
   it("reads both flag styles", () => {
-    expect(parseSeedArgs(["--users", "2", "--videos=9"])).toEqual({ users: 2, videos: 9 });
+    expect(parseSeedArgs(["--users", "2", "--videos=9"])).toEqual({ users: 2, videos: 9, commentsPerVideo: 2 });
   });
   it.each([
     [["--users", "0"], "--users must be a whole number from 1 to 10"],
@@ -43,6 +47,8 @@ describe("parseSeedArgs", () => {
     [["--videos", "51"], "--videos must be a whole number from 1 to 50"],
     [["--videos", "x"], "--videos must be a whole number from 1 to 50"],
     [["--videos"], "--videos must be a whole number from 1 to 50"],
+    [["--comments-per-video", "11"], "--comments-per-video must be a whole number from 0 to 10"],
+    [["--comments-per-video=-1"], "--comments-per-video must be a whole number from 0 to 10"],
   ])("rejects %j naming the flag and range", (argv, message) => {
     expect(() => parseSeedArgs(argv)).toThrow(message);
   });
@@ -70,9 +76,9 @@ describe("checkSeedEnvironment", () => {
 describe("runSeed", () => {
   it("creates Users, Videos from completed Uploads, and queues each", async () => {
     const d = deps();
-    const summary = await runSeed({ users: 2, videos: 6 }, d);
+    const summary = await runSeed({ users: 2, videos: 6, commentsPerVideo: 0 }, d);
 
-    expect(summary).toEqual({ usersCreated: 2, usersFound: 0, videosCreated: 6, videosFound: 0 });
+    expect(summary).toMatchObject({ usersCreated: 2, usersFound: 0, videosCreated: 6, videosFound: 0 });
     expect(d.queued).toHaveLength(6);
     const videos = await prisma.video.findMany({
       include: { upload: true, channel: true },
@@ -91,11 +97,11 @@ describe("runSeed", () => {
   });
 
   it("is idempotent and says nothing new was created", async () => {
-    await runSeed({ users: 2, videos: 3 }, deps());
+    await runSeed({ users: 2, videos: 3, commentsPerVideo: 0 }, deps());
     const d = deps();
-    const summary = await runSeed({ users: 2, videos: 3 }, d);
+    const summary = await runSeed({ users: 2, videos: 3, commentsPerVideo: 0 }, d);
 
-    expect(summary).toEqual({ usersCreated: 0, usersFound: 2, videosCreated: 0, videosFound: 3 });
+    expect(summary).toMatchObject({ usersCreated: 0, usersFound: 2, videosCreated: 0, videosFound: 3, commentsWritten: 0 });
     expect(d.stored).toEqual([]);
     expect(d.queued).toEqual([]);
     expect(d.logs.join("\n")).toContain("Nothing new was created.");
@@ -104,10 +110,10 @@ describe("runSeed", () => {
   });
 
   it("adds only the missing Videos when the count grows, keeping owners", async () => {
-    await runSeed({ users: 2, videos: 2 }, deps());
+    await runSeed({ users: 2, videos: 2, commentsPerVideo: 0 }, deps());
     const before = await prisma.upload.findMany({ orderBy: { tusId: "asc" } });
     const d = deps();
-    await runSeed({ users: 3, videos: 4 }, d);
+    await runSeed({ users: 3, videos: 4, commentsPerVideo: 0 }, d);
 
     expect(d.stored).toEqual(["seed-demo-3", "seed-demo-4"]);
     expect(await prisma.video.count()).toBe(4);
@@ -118,9 +124,9 @@ describe("runSeed", () => {
   });
 
   it("changes nothing when the count is lowered, and says so", async () => {
-    await runSeed({ users: 1, videos: 10 }, deps());
+    await runSeed({ users: 1, videos: 10, commentsPerVideo: 0 }, deps());
     const d = deps();
-    await runSeed({ users: 1, videos: 6 }, d);
+    await runSeed({ users: 1, videos: 6, commentsPerVideo: 0 }, d);
 
     expect(await prisma.video.count()).toBe(10);
     expect(d.logs.join("\n")).toContain("10 seeded Videos exist, you asked for 6, nothing removed");
@@ -132,7 +138,7 @@ describe("runSeed", () => {
     });
     const d = deps();
 
-    await expect(runSeed({ users: 3, videos: 3 }, d)).rejects.toThrow(/Demo-User-2.*not a demo User/);
+    await expect(runSeed({ users: 3, videos: 3, commentsPerVideo: 0 }, d)).rejects.toThrow(/Demo-User-2.*not a demo User/);
     expect(await prisma.user.count()).toBe(1);
     expect(await prisma.video.count()).toBe(0);
     expect(d.stored).toEqual([]);
@@ -140,7 +146,7 @@ describe("runSeed", () => {
 
   it("marks a Video failed when queueing fails", async () => {
     const d = { ...deps(), queue: async () => { throw new Error("down"); } };
-    await expect(runSeed({ users: 1, videos: 1 }, d)).rejects.toThrow(/1 Video failed/);
+    await expect(runSeed({ users: 1, videos: 1, commentsPerVideo: 0 }, d)).rejects.toThrow(/1 Video failed/);
     expect((await prisma.video.findFirstOrThrow()).status).toBe("FAILED");
   });
 });
@@ -148,7 +154,7 @@ describe("runSeed", () => {
 describe("runSeed waiting", () => {
   it("reports progress and ends with all ready", async () => {
     const d = deps();
-    await runSeed({ users: 1, videos: 2 }, { ...d, ...fakeClock(), sleep: async () => {
+    await runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, { ...d, ...fakeClock(), sleep: async () => {
       await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } });
     } });
     expect(d.logs.join("\n")).toMatch(/0\/2 ready, 2 processing, elapsed 0:00/);
@@ -157,24 +163,24 @@ describe("runSeed waiting", () => {
 
   it("times out when nothing processes, then a re-run waits on the same Videos without re-queueing", async () => {
     const stuck = { ...deps(), ...fakeClock(), timeoutMs: 15_000, pollMs: 5_000 };
-    await expect(runSeed({ users: 1, videos: 2 }, stuck)).rejects.toThrow(
+    await expect(runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, stuck)).rejects.toThrow(
       "2 Videos still processing. Is the worker running? Run the seed again to continue.",
     );
     expect(stuck.logs.join("\n")).toContain("elapsed 0:15");
 
     const d = deps();
-    await runSeed({ users: 1, videos: 2 }, d);
+    await runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, d);
     expect(d.queued).toEqual([]);
     expect(await prisma.video.count({ where: { status: "READY" } })).toBe(2);
   });
 
   it("re-queues a FAILED Video on the next run and ends ready", async () => {
-    await runSeed({ users: 1, videos: 2 }, deps());
+    await runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, deps());
     const failed = await prisma.video.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
     await prisma.video.update({ where: { id: failed.id }, data: { status: "FAILED", processingProgress: 40 } });
 
     const d = deps();
-    await runSeed({ users: 1, videos: 2 }, d);
+    await runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, d);
     expect(d.queued).toEqual([failed.id]);
     expect(d.logs.join("\n")).toContain("was Failed, processing queued again");
     const after = await prisma.video.findUniqueOrThrow({ where: { id: failed.id } });
@@ -183,7 +189,7 @@ describe("runSeed waiting", () => {
 
   it("stops with a message when a Video fails while waiting", async () => {
     const d = { ...deps(), sleep: async () => void (await prisma.video.updateMany({ data: { status: "FAILED" } })) };
-    await expect(runSeed({ users: 1, videos: 2 }, d)).rejects.toThrow(/2 Videos failed to process/);
+    await expect(runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, d)).rejects.toThrow(/2 Videos failed to process/);
   });
 });
 
@@ -200,5 +206,65 @@ describe.skipIf(spawnSync("ffmpeg", ["-version"]).status !== 0)("storeDemoClip",
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("runSeed comments", () => {
+  it("writes Comments and Replies from the demo Users, and none the second time", async () => {
+    const d = deps();
+    const first = await runSeed({ users: 2, videos: 2, commentsPerVideo: 3 }, d);
+    expect(first.commentsWritten).toBeGreaterThan(6);
+    const comments = await prisma.comment.findMany({ include: { author: true } });
+    expect(comments.length).toBe(first.commentsWritten);
+    expect(comments.filter((c) => c.parentId === null)).toHaveLength(6);
+    expect(comments.some((c) => c.parentId !== null)).toBe(true);
+    expect(comments.every((c) => c.author.name.startsWith("demo-user-"))).toBe(true);
+
+    const second = await runSeed({ users: 2, videos: 2, commentsPerVideo: 3 }, deps());
+    expect(second.commentsWritten).toBe(0);
+    expect(second.commentsFound).toBe(first.commentsWritten);
+    expect(await prisma.comment.count()).toBe(comments.length);
+  });
+
+  it("writes no more when the number of Users changes", async () => {
+    await runSeed({ users: 3, videos: 2, commentsPerVideo: 2 }, deps());
+    const before = await prisma.comment.count();
+    const again = await runSeed({ users: 2, videos: 2, commentsPerVideo: 2 }, deps());
+    expect(await prisma.comment.count()).toBe(before);
+    expect(again.commentsWritten).toBe(0);
+  });
+
+  it("gives up when the write limit never lifts", async () => {
+    const d = deps();
+    await expect(
+      runSeed({ users: 1, videos: 1, commentsPerVideo: 10 }, {
+        ...d,
+        sleep: async () => void (await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } })),
+      }),
+    ).rejects.toThrow(/rate limit keeps refusing/);
+  });
+
+  it("writes none with 0 per Video", async () => {
+    await runSeed({ users: 1, videos: 2, commentsPerVideo: 0 }, deps());
+    expect(await prisma.comment.count()).toBe(0);
+  });
+
+  it("waits out the write limit and says so", async () => {
+    const d = deps();
+    const sleeps: number[] = [];
+    // One User: 10 Comments on a Video exceed 5 a minute. Waiting moves the writes out of the window.
+    await runSeed({ users: 1, videos: 1, commentsPerVideo: 10 }, {
+      ...d,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        await prisma.video.updateMany({ where: { status: "PROCESSING" }, data: { status: "READY" } });
+        await prisma.comment.updateMany({ data: { createdAt: new Date(Date.now() - 2 * 60_000) } });
+      },
+    });
+    const waits = d.logs.flatMap((l) => /comment rate limit reached, waiting (\d+)s/.exec(l)?.[1] ?? []);
+    expect(waits.length).toBeGreaterThan(0);
+    // Each wait is as long as the line says (the Retry-After the service gave).
+    expect(sleeps.filter((ms) => ms !== 3_000)).toEqual(waits.map((w) => Number(w) * 1000));
+    expect(await prisma.comment.count({ where: { parentId: null } })).toBe(10);
   });
 });
