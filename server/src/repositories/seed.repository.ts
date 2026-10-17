@@ -62,6 +62,12 @@ export class SeedRepository {
     });
   }
 
+  // A Comment this author already wrote with exactly this text in this place
+  // (top level when parentId is null), whatever has happened to it since.
+  static async findComment(videoId: string, authorId: string, body: string, parentId: string | null) {
+    return await prisma.comment.findFirst({ where: { videoId, authorId, body, parentId }, select: { id: true } });
+  }
+
   // Queueing failed after the Video was made: end it as `post-finish` does.
   static async markFailed(videoId: string) {
     await prisma.video.updateMany({

@@ -2,6 +2,8 @@ import { hashPassword } from "../utils/password.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { SeedRepository } from "../repositories/seed.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
+import { HttpError } from "../errors.ts";
+import { CommentService } from "./comments.service.ts";
 
 // A problem the person can fix; the entry file prints it without a stack.
 export class SeedError extends Error {}
@@ -9,6 +11,7 @@ export class SeedError extends Error {}
 export const SEED_LIMITS = {
   users: { min: 1, max: 10, default: 3 },
   videos: { min: 1, max: 50, default: 6 },
+  commentsPerVideo: { min: 0, max: 10, default: 2 },
 } as const;
 
 // Local-only, printed at the end so the demo accounts can be signed in to.
@@ -20,7 +23,7 @@ const demoName = (n: number) => `demo-user-${n}`;
 const demoEmail = (n: number) => `demo-user-${n}@seed.streamsouk.local`;
 const tusIdFor = (n: number) => `${SEED_TUS_PREFIX}${n}`;
 
-export type SeedOptions = { users: number; videos: number };
+export type SeedOptions = { users: number; videos: number; commentsPerVideo?: number };
 
 export type SeedDeps = {
   // Puts a generated clip in upload storage under `tusId`; returns its size in bytes.
@@ -42,14 +45,20 @@ export const WAIT_TIMEOUT_MS = 5 * 60_000;
 const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 const noun = (n: number) => `${n} Video${n === 1 ? "" : "s"}`;
 
-export function parseSeedArgs(argv: string[]): SeedOptions {
-  const options: SeedOptions = { users: SEED_LIMITS.users.default, videos: SEED_LIMITS.videos.default };
+const FLAGS = { "--users": "users", "--videos": "videos", "--comments-per-video": "commentsPerVideo" } as const;
+
+export function parseSeedArgs(argv: string[]): Required<SeedOptions> {
+  const options: Required<SeedOptions> = {
+    users: SEED_LIMITS.users.default,
+    videos: SEED_LIMITS.videos.default,
+    commentsPerVideo: SEED_LIMITS.commentsPerVideo.default,
+  };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]!.split("=")[0]!;
-    if (flag !== "--users" && flag !== "--videos") {
-      throw new SeedError(`Unknown option ${argv[i]}. Use --users N and --videos N.`);
+    if (!Object.hasOwn(FLAGS, flag)) {
+      throw new SeedError(`Unknown option ${argv[i]}. Use --users N, --videos N and --comments-per-video N.`);
     }
-    const key = flag === "--users" ? "users" : "videos";
+    const key = FLAGS[flag as keyof typeof FLAGS];
     const { min, max } = SEED_LIMITS[key];
     const raw = argv[i]!.includes("=") ? argv[i]!.slice(flag.length + 1) : argv[++i];
     const value = Number(raw);
@@ -81,7 +90,46 @@ const TOPICS = [
   "Pixels in motion", "Frame counter demo", "Tone and picture sync", "Eight seconds of nothing",
 ];
 
-export type SeedSummary = { usersCreated: number; usersFound: number; videosCreated: number; videosFound: number };
+export type SeedSummary = {
+  usersCreated: number;
+  usersFound: number;
+  videosCreated: number;
+  videosFound: number;
+  commentsWritten: number;
+  commentsFound: number;
+};
+
+const COMMENTS = [
+  "Great test pattern, the colors look sharp.", "Is that a sine tone I hear?", "Short and sweet.",
+  "Watching this on my phone, plays smoothly.", "The gradient transition is lovely.", "Perfect for checking my setup.",
+  "Audio and picture are in sync here.", "Nice little demo clip.", "I replayed this three times.",
+  "Looks great at every quality setting.", "Simple, clean and useful.", "Thanks for sharing this one.",
+];
+const REPLIES = [
+  "Agreed!", "Same here.", "Good catch.", "I noticed that too.", "Thanks for watching.", "Glad it helps.",
+];
+
+// Writes `text` through the Comment service, waiting out the write limit.
+// Returns false when this author already wrote that text there.
+async function writeComment(
+  deps: SeedDeps,
+  c: { videoId: string; authorId: string; text: string; parentId: string | null },
+): Promise<{ id: string; written: boolean }> {
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const found = await SeedRepository.findComment(c.videoId, c.authorId, c.text, c.parentId);
+  if (found) return { id: found.id, written: false };
+  for (;;) {
+    try {
+      const made = await CommentService.create(c.authorId, c.videoId, c.text, c.parentId);
+      return { id: made.id, written: true };
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 429) throw error;
+      const seconds = Number(error.headers["Retry-After"]) || 60;
+      deps.log(`  comment rate limit reached, waiting ${seconds}s`);
+      await sleep(seconds * 1000);
+    }
+  }
+}
 
 // Polls until every Video is READY. Throws a SeedError on timeout, or when
 // nothing is left processing but some failed; running the seed again waits on
@@ -120,12 +168,12 @@ async function waitForReady(videoIds: string[], deps: SeedDeps) {
   }
 }
 
-export async function runSeed({ users, videos }: SeedOptions, deps: SeedDeps): Promise<SeedSummary> {
+export async function runSeed({ users, videos, commentsPerVideo = SEED_LIMITS.commentsPerVideo.default }: SeedOptions, deps: SeedDeps): Promise<SeedSummary> {
   const { log } = deps;
-  log(`Seeding demo data: ${users} demo Users, ${videos} Videos (one in 6 Unlisted, the rest Public).`);
+  log(`Seeding demo data: ${users} demo Users, ${videos} Videos (one in 6 Unlisted, the rest Public), ${commentsPerVideo} Comments each.`);
 
   // 1. Demo Users. Everything is checked before anything is written.
-  log("[1/4] Demo Users");
+  log("[1/5] Demo Users");
   const numbers = Array.from({ length: users }, (_, i) => i + 1);
   const existing = new Map(
     (await SeedRepository.findUsersByName(numbers.map((n) => demoName(n)))).map((u) => [u.nameKey, u]),
@@ -142,7 +190,7 @@ export async function runSeed({ users, videos }: SeedOptions, deps: SeedDeps): P
     }
   }
   const owners: { id: string }[] = [];
-  const summary: SeedSummary = { usersCreated: 0, usersFound: 0, videosCreated: 0, videosFound: 0 };
+  const summary: SeedSummary = { usersCreated: 0, usersFound: 0, videosCreated: 0, videosFound: 0, commentsWritten: 0, commentsFound: 0 };
   for (const n of numbers) {
     const found = existing.get(demoName(n));
     if (found) {
@@ -164,7 +212,7 @@ export async function runSeed({ users, videos }: SeedOptions, deps: SeedDeps): P
   }
 
   // 2. Videos, each from a finished Upload through the real pipeline.
-  log("[2/4] Videos");
+  log("[2/5] Videos");
   const seeded = await SeedRepository.findSeededUploads(SEED_TUS_PREFIX);
   const have = new Map(seeded.map((u) => [u.tusId, u.video]));
   for (let n = 1; n <= videos; n++) {
@@ -210,7 +258,7 @@ export async function runSeed({ users, videos }: SeedOptions, deps: SeedDeps): P
   }
 
   // 3. Wait for the worker to make them Ready.
-  log("[3/4] Processing");
+  log("[3/5] Processing");
   await waitForReady(
     (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
       .filter((u) => Number(u.tusId.slice(SEED_TUS_PREFIX.length)) <= videos && u.video && !u.video.deletedAt)
@@ -218,11 +266,38 @@ export async function runSeed({ users, videos }: SeedOptions, deps: SeedDeps): P
     deps,
   );
 
-  // 4. Summary
-  log("[4/4] Done");
+  // 4. Comments and Replies on the READY Videos, through the real service.
+  log("[4/5] Comments");
+  const ready = (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
+    .filter((u) => Number(u.tusId.slice(SEED_TUS_PREFIX.length)) <= videos && u.video?.status === "READY" && !u.video.deletedAt)
+    .sort((x, y) => Number(x.tusId.slice(SEED_TUS_PREFIX.length)) - Number(y.tusId.slice(SEED_TUS_PREFIX.length)));
+  const tally = (r: { written: boolean }) => void (r.written ? summary.commentsWritten++ : summary.commentsFound++);
+  for (const upload of ready) {
+    const n = Number(upload.tusId.slice(SEED_TUS_PREFIX.length));
+    const videoId = upload.video!.id;
+    for (let k = 0; k < commentsPerVideo; k++) {
+      const authorIndex = (n + k) % owners.length;
+      const top = await writeComment(deps, {
+        videoId, authorId: owners[authorIndex]!.id, text: COMMENTS[(n + k) % COMMENTS.length]!, parentId: null,
+      });
+      tally(top);
+      // A Reply on every second Comment, two on every fourth, from the next User.
+      for (let r = 0; r < (k % 4 === 0 ? 2 : k % 2 === 0 ? 1 : 0); r++) {
+        tally(await writeComment(deps, {
+          videoId, authorId: owners[(authorIndex + 1 + r) % owners.length]!.id,
+          text: REPLIES[(n + k + r) % REPLIES.length]!, parentId: top.id,
+        }));
+      }
+    }
+  }
+  log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} already there`);
+
+  // 5. Summary
+  log("[5/5] Done");
   log(`  Users: ${summary.usersCreated} created, ${summary.usersFound} found`);
+  log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} found`);
   log(`  Videos: ${summary.videosCreated} created, ${summary.videosFound} found`);
-  if (summary.videosCreated + summary.usersCreated === 0) log("  Nothing new was created.");
+  if (summary.videosCreated + summary.usersCreated + summary.commentsWritten === 0) log("  Nothing new was created.");
   log(`Demo sign-in (local only), password "${DEMO_PASSWORD}":`);
   for (const n of numbers) log(`  ${demoEmail(n)}`);
   return summary;

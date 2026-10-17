@@ -107,7 +107,7 @@ One terminal each, from the repo root:
 3. Open **Studio**. The Video shows *Processing* with a progress bar, then *Ready* after the worker has made the HLS Renditions and the thumbnail (seconds for a short clip).
 4. In Studio choose **Edit**, give it a title and a description, set Visibility to Public and save. **Watch** plays it, and it appears on the home page.
 
-Want demo content instead? With the worker running, `pnpm --filter server seed` (optionally `--users N --videos N`) adds demo Users and Videos; it waits until every Video is ready (5 minute limit) and is safe to run again.
+Want demo content instead? With the worker running, `pnpm --filter server seed` (optionally `--users N --videos N --comments-per-video N`) adds demo Users, Videos and Comments with Replies (waiting out the comment rate limit when needed); it waits until every Video is ready (5 minute limit) and is safe to run again.
 
 If the Video stays on *Processing*, look at the worker terminal. `curl http://localhost:3000/api/v1/videos` returning `{"videos":[],...}` confirms the API and the database.
 
