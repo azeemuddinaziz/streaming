@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../lib/prisma.ts";
 import { storeDemoClip } from "../lib/seed-clip.ts";
+import { ReactionService } from "./reactions.service.ts";
+import { VideoService } from "./videos.service.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase } from "../test/helpers.ts";
 import { checkSeedEnvironment, parseSeedArgs, runSeed, SeedError } from "./seed.service.ts";
@@ -266,5 +268,81 @@ describe("runSeed comments", () => {
     // Each wait is as long as the line says (the Retry-After the service gave).
     expect(sleeps.filter((ms) => ms !== 3_000)).toEqual(waits.map((w) => Number(w) * 1000));
     expect(await prisma.comment.count({ where: { parentId: null } })).toBe(10);
+  });
+});
+
+describe("runSeed reactions and subscriptions", () => {
+  it("adds Likes and a few Dislikes from other Users, and a Subscription ring, once", async () => {
+    const first = await runSeed({ users: 3, videos: 3, commentsPerVideo: 2 }, deps());
+    expect(first.reactionsWritten).toBeGreaterThan(0);
+    const reactions = await prisma.reaction.findMany({
+      include: { user: true, video: { include: { channel: true } }, comment: true },
+    });
+    expect(reactions.some((r) => r.kind === "LIKE" && r.videoId)).toBe(true);
+    expect(reactions.some((r) => r.kind === "LIKE" && r.commentId)).toBe(true);
+    expect(reactions.some((r) => r.kind === "DISLIKE")).toBe(true);
+    // Nobody reacts to their own Video or Comment.
+    for (const r of reactions) {
+      if (r.video) expect(r.video.channel.userId).not.toBe(r.userId);
+      if (r.comment) expect(r.comment.authorId).not.toBe(r.userId);
+    }
+    const subs = await prisma.subscription.findMany({ include: { user: true, channel: { include: { user: true } } } });
+    expect(subs.map((s) => `${s.user.name}>${s.channel.user.name}`).sort()).toEqual([
+      "demo-user-1>demo-user-2", "demo-user-2>demo-user-3", "demo-user-3>demo-user-1",
+    ]);
+
+    const before = [await prisma.reaction.count(), await prisma.subscription.count()];
+    const second = await runSeed({ users: 3, videos: 3, commentsPerVideo: 2 }, deps());
+    expect([second.reactionsWritten, second.subscriptionsWritten]).toEqual([0, 0]);
+    expect(second.reactionsFound).toBe(first.reactionsWritten);
+    expect(second.subscriptionsFound).toBe(3);
+    expect([await prisma.reaction.count(), await prisma.subscription.count()]).toEqual(before);
+  });
+
+  it("leaves existing Reactions alone when the number of Users changes", async () => {
+    await runSeed({ users: 2, videos: 3, commentsPerVideo: 2 }, deps());
+    const before = await prisma.reaction.findMany({ orderBy: { id: "asc" } });
+    await runSeed({ users: 3, videos: 3, commentsPerVideo: 3 }, deps());
+    const after = await prisma.reaction.findMany({ where: { id: { in: before.map((r) => r.id) } }, orderBy: { id: "asc" } });
+    expect(after.map((r) => r.kind)).toEqual(before.map((r) => r.kind));
+  });
+
+  it("shows the owner Dislikes in the Studio list, and Viewers only Likes", async () => {
+    await runSeed({ users: 3, videos: 5, commentsPerVideo: 0 }, deps());
+    const owners = await prisma.user.findMany({ include: { channel: true } });
+    let ownerSawDislike = false;
+    for (const o of owners) {
+      for (const v of (await VideoService.listStudio(o.id, 1, undefined)).videos) {
+        if (v.dislikes > 0) ownerSawDislike = true;
+        expect(v.likes).toBeGreaterThan(0);
+      }
+    }
+    expect(ownerSawDislike).toBe(true);
+    const video = await prisma.video.findFirstOrThrow({ include: { channel: true } });
+    const viewer = owners.find((u) => u.id !== video.channel.userId)!;
+    const seen = await ReactionService.set(viewer.id, video.id, "LIKE");
+    expect(seen).not.toHaveProperty("dislikes");
+  });
+
+  it("writes no Reactions and no Subscriptions with a single User", async () => {
+    const d = deps();
+    const summary = await runSeed({ users: 1, videos: 2, commentsPerVideo: 1 }, d);
+    expect(summary.reactionsWritten + summary.subscriptionsWritten).toBe(0);
+    expect(await prisma.reaction.count()).toBe(0);
+    expect(await prisma.subscription.count()).toBe(0);
+  });
+
+  it("waits out the Reaction write limit", async () => {
+    const d = deps();
+    // The limit is per User: with 2 Users each reacts to over 30 things Reactions in a minute.
+    await runSeed({ users: 2, videos: 4, commentsPerVideo: 10 }, {
+      ...d,
+      sleep: async () => {
+        await d.sleep();
+        await prisma.reaction.updateMany({ data: { updatedAt: new Date(Date.now() - 2 * 60_000) } });
+      },
+    });
+    expect(d.logs.some((l) => /reaction rate limit reached, waiting \d+s/.test(l))).toBe(true);
+    expect(await prisma.reaction.count()).toBeGreaterThan(30);
   });
 });
