@@ -4,6 +4,13 @@ import path from "node:path";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 import type { Transcoder } from "../lib/ffmpeg.ts";
 import type { Storage } from "../lib/storage.ts";
+import { ExpectedJobError, enrichJob, jobLog, redactInJob } from "../lib/worker-log.ts";
+
+// The file could not be encoded (not a video, unreadable). Expected, so the
+// worker logs it without a stack.
+export class TranscodeError extends ExpectedJobError {
+  name = "TranscodeError";
+}
 
 const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
@@ -20,6 +27,8 @@ const TRANSCODE_WEIGHT = 100 - DOWNLOAD_WEIGHT - UPLOAD_WEIGHT;
 // A write is skipped unless the bar moved this far, or this long has passed.
 const WRITE_EVERY_POINTS = 2;
 const WRITE_EVERY_MS = 2000;
+// The worker logs the progress written each time it crosses a multiple of this.
+const LOG_EVERY_POINTS = 10;
 
 // Writes progress to the Video, throttled. Writes are chained so they land in
 // order, and a failed one is dropped: the bar is cosmetic and must never fail
@@ -29,6 +38,7 @@ function progressWriter(videoId: string, now: () => number) {
   let started = false;
   let written = -Infinity;
   let writtenAt = 0;
+  let logged = 0;
   let chain: Promise<void> = Promise.resolve();
   return {
     start() {
@@ -42,6 +52,11 @@ function progressWriter(videoId: string, now: () => number) {
       if (moved < WRITE_EVERY_POINTS && now() - writtenAt < WRITE_EVERY_MS) return;
       written = value;
       writtenAt = now();
+      const step = Math.floor(value / LOG_EVERY_POINTS) * LOG_EVERY_POINTS;
+      if (step > logged) {
+        logged = step;
+        jobLog("video.progress", { progress: step });
+      }
       chain = chain.then(() => VideoRepository.setProgress(videoId, value)).catch(() => undefined);
     },
     settled: () => chain,
@@ -54,23 +69,42 @@ export const VideoProcessingService = {
   // anything fails, leaving the Video processing so the job can be retried;
   // `fail` is what finally gives up on it.
   async process(videoId: string, storage: Storage, transcode: Transcoder, now: () => number = Date.now) {
+    enrichJob({ videoId });
     const video = await VideoRepository.findForProcessing(videoId);
-    if (!video || video.status !== "PROCESSING") return;
+    if (!video || video.status !== "PROCESSING") {
+      jobLog("video.skipped", { reason: video ? video.status : "missing" });
+      return;
+    }
     if (!video.upload) throw new Error(`Video ${videoId} has no Upload to process.`);
+    // The tusd id is a capability; a storage error can name it.
+    redactInJob(video.upload.tusId);
 
     const progress = progressWriter(videoId, now);
     const workDir = await mkdtemp(path.join(tmpdir(), "streamsouk-"));
     try {
       const original = path.join(workDir, "original");
       const output = path.join(workDir, "out");
+      jobLog("video.phase", { phase: "downloading" });
       await storage.downloadOriginal(video.upload.tusId, original);
-      const result = await transcode(original, output, (percent) => {
-        progress.start();
-        progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT);
-      });
+      jobLog("video.phase", { phase: "transcoding" });
+      let result;
+      try {
+        result = await transcode(
+          original,
+          output,
+          (percent) => {
+            progress.start();
+            progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT);
+          },
+          (rendition) => jobLog("video.rendition", { rendition }),
+        );
+      } catch (error) {
+        throw new TranscodeError(error instanceof Error ? error.message : String(error), { cause: error });
+      }
 
       const prefix = `videos/${videoId}/`;
       const base = DOWNLOAD_WEIGHT + TRANSCODE_WEIGHT;
+      jobLog("video.phase", { phase: "uploading", files: result.files.length });
       for (const [index, file] of result.files.entries()) {
         const type = CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream";
         await storage.put(prefix + file.split(path.sep).join("/"), path.join(output, file), type);
@@ -89,6 +123,7 @@ export const VideoProcessingService = {
           playlistKey: prefix + r.playlist,
         })),
       });
+      jobLog("video.phase", { phase: "ready", renditions: result.renditions.length });
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }
@@ -96,6 +131,6 @@ export const VideoProcessingService = {
 
   // Gives up on a Video so it does not sit in processing forever.
   async fail(videoId: string) {
-    await VideoRepository.markFailed(videoId);
+    if (await VideoRepository.markFailed(videoId)) jobLog("video.failed");
   },
 };

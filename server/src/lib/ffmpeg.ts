@@ -64,11 +64,13 @@ export type Transcoded = {
 };
 
 // `onProgress` gets the percent done (0 to 100, rising) of the whole transcode.
-// It is never called when the source's duration is unknown.
+// It is never called when the source's duration is unknown. `onRendition` gets
+// each Rendition's name ("720p") once it is encoded.
 export type Transcoder = (
   input: string,
   outputDir: string,
   onProgress?: (percent: number) => void,
+  onRendition?: (name: string) => void,
 ) => Promise<Transcoded>;
 
 // Heights to encode, tallest first, with the video bitrate (kbit/s) of each.
@@ -111,7 +113,7 @@ async function probe(input: string) {
 // Cuts the file into HLS Renditions (video and audio together), a master
 // playlist listing them, and a JPEG of the first frame. Throws when ffmpeg
 // cannot read the file.
-export const transcode: Transcoder = async (input, outputDir, onProgress) => {
+export const transcode: Transcoder = async (input, outputDir, onProgress, onRendition) => {
   const source = await probe(input);
   const duration = await probeDuration(input);
 
@@ -160,6 +162,7 @@ export const transcode: Transcoder = async (input, outputDir, onProgress) => {
       bandwidth: (step.videoKbps + AUDIO_KBPS) * 1000,
       playlist: `${dir}/index.m3u8`,
     });
+    onRendition?.(dir);
   }
 
   const thumbnail = "thumbnail.jpg";

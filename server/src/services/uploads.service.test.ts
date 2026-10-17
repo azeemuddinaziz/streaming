@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../lib/prisma.ts";
+import { runJob, setWorkerEmit, type WorkerLine } from "../lib/worker-log.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase } from "../test/helpers.ts";
 import { UploadService } from "./uploads.service.ts";
@@ -125,3 +126,40 @@ describe("discarding stale Uploads", () => {
     expect(await prisma.video.count()).toBe(0);
   });
 });
+
+describe("the worker's line for discarding", () => {
+  let lines: WorkerLine[];
+  const attempt = { job: "discard-stale-uploads", jobId: "job-1", attempt: 1, final: false };
+
+  beforeEach(() => {
+    lines = [];
+    setWorkerEmit((line) => lines.push(line));
+  });
+
+  afterEach(() => setWorkerEmit(null));
+
+  it("says how many stale Uploads it found, discarded and could not, without their tusd ids", async () => {
+    const { id } = await owner();
+    await upload(id, "stuck-tus-id", 26);
+    await upload(id, "fine-tus-id", 25);
+    await upload(id, "recent-tus-id", 2);
+
+    await expect(
+      runJob(attempt, () =>
+        UploadService.discardStale(async (tusId) => {
+          if (tusId === "stuck-tus-id") throw new Error(`tusd answered 500 when removing upload ${tusId}.`);
+        }).then(() => undefined),
+      ),
+    ).rejects.toThrow();
+
+    expect(lines.find((l) => l.event === "uploads.discarded")).toMatchObject({ found: 2, discarded: 1, failed: 1 });
+    expect(JSON.stringify(lines)).not.toMatch(/tus-id/);
+  });
+
+  it("writes the line when there is nothing to discard", async () => {
+    await runJob(attempt, () => UploadService.discardStale(async () => {}).then(() => undefined));
+
+    expect(lines.find((l) => l.event === "uploads.discarded")).toMatchObject({ found: 0, discarded: 0, failed: 0 });
+  });
+});
+
