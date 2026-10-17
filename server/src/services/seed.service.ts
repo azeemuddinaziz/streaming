@@ -3,7 +3,12 @@ import { UserRepository } from "../repositories/users.repository.ts";
 import { DEMO_EMAIL_DOMAIN, SeedRepository } from "../repositories/seed.repository.ts";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 import { HttpError } from "../errors.ts";
+import { ChannelRepository } from "../repositories/channels.repository.ts";
+import { ReactionRepository } from "../repositories/reactions.repository.ts";
+import { SubscriptionRepository } from "../repositories/subscriptions.repository.ts";
 import { CommentService } from "./comments.service.ts";
+import { ReactionService } from "./reactions.service.ts";
+import { SubscriptionService } from "./subscriptions.service.ts";
 
 // A problem the person can fix; the entry file prints it without a stack.
 export class SeedError extends Error {}
@@ -104,6 +109,10 @@ export type SeedSummary = {
   videosFound: number;
   commentsWritten: number;
   commentsFound: number;
+  reactionsWritten: number;
+  reactionsFound: number;
+  subscriptionsWritten: number;
+  subscriptionsFound: number;
 };
 
 const COMMENTS = [
@@ -116,30 +125,42 @@ const REPLIES = [
   "Agreed!", "Same here.", "Good catch.", "I noticed that too.", "Thanks for watching.", "Glad it helps.",
 ];
 
+// Runs a write through a service, waiting out a 429 for as long as it says.
+// `what` names the limit in the log ("comment", "reaction", "subscription").
+async function waitingOutLimit<T>(deps: SeedDeps, what: string, write: () => Promise<T>): Promise<T> {
+  const sleep = deps.sleep ?? defaultSleep;
+  for (let waits = 0; ; waits++) {
+    try {
+      return await write();
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 429) throw error;
+      if (waits >= MAX_RATE_LIMIT_WAITS) {
+        throw new SeedError(`The ${what} rate limit keeps refusing writes. Run the seed again later to continue.`);
+      }
+      const seconds = Number(error.headers["Retry-After"]) || 60;
+      deps.log(`  ${what} rate limit reached, waiting ${seconds}s`);
+      await sleep(seconds * 1000);
+    }
+  }
+}
+
 // Writes `text` through the Comment service, waiting out the write limit.
 // A demo User already having written that text there counts as written.
 async function writeComment(
   deps: SeedDeps,
   c: { videoId: string; authorId: string; text: string; parentId: string | null },
 ): Promise<{ id: string; written: boolean }> {
-  const sleep = deps.sleep ?? defaultSleep;
   const found = await SeedRepository.findComment(c.videoId, c.text, c.parentId);
   if (found) return { id: found.id, written: false };
-  for (let waits = 0; ; waits++) {
-    try {
-      const made = await CommentService.create(c.authorId, c.videoId, c.text, c.parentId);
-      return { id: made.id, written: true };
-    } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 429) throw error;
-      if (waits >= MAX_RATE_LIMIT_WAITS) {
-        throw new SeedError("The comment rate limit keeps refusing writes. Run the seed again later to continue.");
-      }
-      const seconds = Number(error.headers["Retry-After"]) || 60;
-      deps.log(`  comment rate limit reached, waiting ${seconds}s`);
-      await sleep(seconds * 1000);
-    }
-  }
+  const made = await waitingOutLimit(deps, "comment", () =>
+    CommentService.create(c.authorId, c.videoId, c.text, c.parentId),
+  );
+  return { id: made.id, written: true };
 }
+
+type Kind = "LIKE" | "DISLIKE";
+// Mostly Likes; every fifth pairing is a Dislike so the owner's count shows.
+const kindFor = (seed: number): Kind => (seed % 5 === 0 ? "DISLIKE" : "LIKE");
 
 // Polls until every Video is READY. Throws a SeedError on timeout, or when
 // nothing is left processing but some failed; running the seed again waits on
@@ -180,10 +201,10 @@ async function waitForReady(videoIds: string[], deps: SeedDeps) {
 
 export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, deps: SeedDeps): Promise<SeedSummary> {
   const { log } = deps;
-  log(`Seeding demo data: ${users} demo Users, ${videos} Videos (one in 6 Unlisted, the rest Public), ${commentsPerVideo} Comments each.`);
+  log(`Seeding demo data: ${users} demo Users, ${videos} Videos (one in 6 Unlisted, the rest Public), ${commentsPerVideo} Comments each, with Reactions and Subscriptions.`);
 
   // 1. Demo Users. Everything is checked before anything is written.
-  log("[1/5] Demo Users");
+  log("[1/7] Demo Users");
   const numbers = Array.from({ length: users }, (_, i) => i + 1);
   const existing = new Map(
     (await SeedRepository.findUsersByName(numbers.map((n) => demoName(n)))).map((u) => [u.nameKey, u]),
@@ -200,7 +221,7 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
     }
   }
   const owners: { id: string }[] = [];
-  const summary: SeedSummary = { usersCreated: 0, usersFound: 0, videosCreated: 0, videosFound: 0, commentsWritten: 0, commentsFound: 0 };
+  const summary: SeedSummary = { usersCreated: 0, usersFound: 0, videosCreated: 0, videosFound: 0, commentsWritten: 0, commentsFound: 0, reactionsWritten: 0, reactionsFound: 0, subscriptionsWritten: 0, subscriptionsFound: 0 };
   for (const n of numbers) {
     const found = existing.get(demoName(n));
     if (found) {
@@ -222,7 +243,7 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
   }
 
   // 2. Videos, each from a finished Upload through the real pipeline.
-  log("[2/5] Videos");
+  log("[2/7] Videos");
   const seeded = await SeedRepository.findSeededUploads(SEED_TUS_PREFIX);
   const have = new Map(seeded.map((u) => [u.tusId, u.video]));
   for (let n = 1; n <= videos; n++) {
@@ -268,7 +289,7 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
   }
 
   // 3. Wait for the worker to make them Ready.
-  log("[3/5] Processing");
+  log("[3/7] Processing");
   await waitForReady(
     (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
       .filter((u) => seededNumber(u.tusId) <= videos && u.video && !u.video.deletedAt)
@@ -277,7 +298,7 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
   );
 
   // 4. Comments and Replies on the READY Videos, through the real service.
-  log("[4/5] Comments");
+  log("[4/7] Comments");
   const ready = (await SeedRepository.findSeededUploads(SEED_TUS_PREFIX))
     .filter((u) => seededNumber(u.tusId) <= videos && u.video?.status === "READY" && !u.video.deletedAt)
     .sort((x, y) => seededNumber(x.tusId) - seededNumber(y.tusId));
@@ -302,12 +323,72 @@ export async function runSeed({ users, videos, commentsPerVideo }: SeedOptions, 
   }
   log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} already there`);
 
-  // 5. Summary
-  log("[5/5] Done");
+  // 5. Reactions from the other demo Users, on the Videos and on their Comments.
+  log("[5/7] Reactions");
+  const userIds = owners.map((o) => o.id);
+  const react = async (
+    target: { videoId?: string; commentId?: string; authorId: string },
+    index: number,
+  ) => {
+    // Everyone but the one who wrote it; a lone User has nobody to react.
+    const others = userIds.filter((id) => id !== target.authorId);
+    for (const [j, userId] of others.entries()) {
+      const kind = kindFor(index + j);
+      const had = target.commentId
+        ? await ReactionRepository.findOnComment(userId, target.commentId)
+        : await ReactionRepository.find(userId, target.videoId!);
+      if (had === kind) {
+        summary.reactionsFound++;
+        continue;
+      }
+      await waitingOutLimit(deps, "reaction", () =>
+        target.commentId
+          ? ReactionService.setOnComment(userId, target.videoId!, target.commentId, kind)
+          : ReactionService.set(userId, target.videoId!, kind),
+      );
+      summary.reactionsWritten++;
+    }
+  };
+  for (const upload of ready) {
+    const n = seededNumber(upload.tusId);
+    await react({ videoId: upload.video!.id, authorId: upload.userId }, n);
+  }
+  const readyIds = ready.map((u) => u.video!.id);
+  const seededComments = await SeedRepository.findSeededComments(readyIds);
+  for (const [i, comment] of seededComments.entries()) {
+    await react(
+      { videoId: comment.videoId, commentId: comment.id, authorId: comment.authorId },
+      i,
+    );
+  }
+  log(`  Reactions: ${summary.reactionsWritten} written, ${summary.reactionsFound} already there`);
+
+  // 6. Subscriptions as a ring: User i subscribes to User i+1's Channel.
+  log("[6/7] Subscriptions");
+  if (owners.length < 2) {
+    log("  Skipped: a lone User cannot subscribe to their own Channel");
+  } else {
+    for (const [i, owner] of owners.entries()) {
+      const name = demoName(numbers[(i + 1) % numbers.length]!);
+      const channel = (await ChannelRepository.findByName(name))?.channel;
+      if (channel && (await SubscriptionRepository.exists(owner.id, channel.id))) {
+        summary.subscriptionsFound++;
+        continue;
+      }
+      await waitingOutLimit(deps, "subscription", () => SubscriptionService.subscribe(owner.id, name));
+      summary.subscriptionsWritten++;
+    }
+  }
+  log(`  Subscriptions: ${summary.subscriptionsWritten} written, ${summary.subscriptionsFound} already there`);
+
+  // 7. Summary
+  log("[7/7] Done");
   log(`  Users: ${summary.usersCreated} created, ${summary.usersFound} found`);
   log(`  Comments and Replies: ${summary.commentsWritten} written, ${summary.commentsFound} already there`);
+  log(`  Reactions: ${summary.reactionsWritten} written, ${summary.reactionsFound} already there`);
+  log(`  Subscriptions: ${summary.subscriptionsWritten} written, ${summary.subscriptionsFound} already there`);
   log(`  Videos: ${summary.videosCreated} created, ${summary.videosFound} found`);
-  if (summary.videosCreated + summary.usersCreated + summary.commentsWritten === 0) log("  Nothing new was created.");
+  if (summary.videosCreated + summary.usersCreated + summary.commentsWritten + summary.reactionsWritten + summary.subscriptionsWritten === 0) log("  Nothing new was created.");
   log(`Demo sign-in (local only), password "${DEMO_PASSWORD}":`);
   for (const n of numbers) log(`  ${demoEmail(n)}`);
   return summary;

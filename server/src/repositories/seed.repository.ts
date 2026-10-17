@@ -75,6 +75,21 @@ export class SeedRepository {
     });
   }
 
+  // Every Comment and Reply a demo User wrote on these Videos that is still
+  // visible (not deleted, not hidden), oldest first so the order is stable.
+  static async findSeededComments(videoIds: string[]) {
+    return await prisma.comment.findMany({
+      where: {
+        videoId: { in: videoIds },
+        deletedAt: null,
+        hiddenAt: null,
+        author: { email: { endsWith: DEMO_EMAIL_DOMAIN } },
+      },
+      select: { id: true, videoId: true, authorId: true },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
   // Queueing failed after the Video was made: end it as `post-finish` does.
   static async markFailed(videoId: string) {
     await prisma.video.updateMany({

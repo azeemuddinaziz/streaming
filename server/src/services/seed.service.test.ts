@@ -268,3 +268,54 @@ describe("runSeed comments", () => {
     expect(await prisma.comment.count({ where: { parentId: null } })).toBe(10);
   });
 });
+
+describe("runSeed reactions and subscriptions", () => {
+  it("adds Likes and a few Dislikes from other Users, and a Subscription ring, once", async () => {
+    const first = await runSeed({ users: 3, videos: 3, commentsPerVideo: 2 }, deps());
+    expect(first.reactionsWritten).toBeGreaterThan(0);
+    const reactions = await prisma.reaction.findMany({
+      include: { user: true, video: { include: { channel: true } }, comment: true },
+    });
+    expect(reactions.some((r) => r.kind === "LIKE" && r.videoId)).toBe(true);
+    expect(reactions.some((r) => r.kind === "LIKE" && r.commentId)).toBe(true);
+    expect(reactions.some((r) => r.kind === "DISLIKE")).toBe(true);
+    // Nobody reacts to their own Video or Comment.
+    for (const r of reactions) {
+      if (r.video) expect(r.video.channel.userId).not.toBe(r.userId);
+      if (r.comment) expect(r.comment.authorId).not.toBe(r.userId);
+    }
+    const subs = await prisma.subscription.findMany({ include: { user: true, channel: { include: { user: true } } } });
+    expect(subs.map((s) => `${s.user.name}>${s.channel.user.name}`).sort()).toEqual([
+      "demo-user-1>demo-user-2", "demo-user-2>demo-user-3", "demo-user-3>demo-user-1",
+    ]);
+
+    const before = [await prisma.reaction.count(), await prisma.subscription.count()];
+    const second = await runSeed({ users: 3, videos: 3, commentsPerVideo: 2 }, deps());
+    expect([second.reactionsWritten, second.subscriptionsWritten]).toEqual([0, 0]);
+    expect(second.reactionsFound).toBe(first.reactionsWritten);
+    expect(second.subscriptionsFound).toBe(3);
+    expect([await prisma.reaction.count(), await prisma.subscription.count()]).toEqual(before);
+  });
+
+  it("writes no Reactions and no Subscriptions with a single User", async () => {
+    const d = deps();
+    const summary = await runSeed({ users: 1, videos: 2, commentsPerVideo: 1 }, d);
+    expect(summary.reactionsWritten + summary.subscriptionsWritten).toBe(0);
+    expect(await prisma.reaction.count()).toBe(0);
+    expect(await prisma.subscription.count()).toBe(0);
+  });
+
+  it("waits out the Reaction write limit", async () => {
+    const d = deps();
+    // The limit is per User: 2 Users each react to over 30 things Reactions in a minute.
+    await runSeed({ users: 2, videos: 4, commentsPerVideo: 10 }, {
+      ...d,
+      sleep: async () => {
+        await d.sleep();
+        await prisma.reaction.updateMany({ data: { updatedAt: new Date(Date.now() - 2 * 60_000) } });
+      },
+    });
+    expect(d.logs.some((l) => /reaction rate limit reached, waiting \d+s/.test(l))).toBe(true);
+    expect(await prisma.reaction.count()).toBeGreaterThan(30);
+  });
+});
