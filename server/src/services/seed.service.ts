@@ -82,6 +82,30 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
   return options;
 }
 
+export function seedHelp(): string {
+  const { users, videos, commentsPerVideo } = SEED_LIMITS;
+  const range = (l: { min: number; max: number; default: number }) => `${l.min} to ${l.max}, default ${l.default}`;
+  return [
+    "Usage: pnpm seed [--users N] [--videos N] [--comments-per-video N]",
+    "",
+    "Fills a local run with demo Users, Videos, Comments with Replies, Reactions and Subscriptions,",
+    "then waits for the worker to process the Videos. Safe to run again.",
+    "",
+    "Options:",
+    `  --users N               demo Users (${range(users)})`,
+    `  --videos N              demo Videos (${range(videos)})`,
+    `  --comments-per-video N  top-level Comments per Video (${range(commentsPerVideo)})`,
+    "  -h, --help              show this help",
+    "",
+    "Examples:",
+    "  Local (worker running):  pnpm --filter server seed --users 5 --videos 12",
+    "  Docker (stack running):  docker compose run --rm api ./node_modules/.bin/tsx src/seed.ts --users 5 --videos 12",
+    "",
+    "Demo Users are demo-user-N with the password demo-password (local only).",
+    "",
+  ].join("\n");
+}
+
 export function checkSeedEnvironment(
   env: Record<string, string | undefined>,
   tools: { ffmpeg: boolean },

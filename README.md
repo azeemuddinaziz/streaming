@@ -34,8 +34,28 @@ Open **http://localhost:3001**. The API is on `:3000` and the upload server (tus
 * **Reset everything:** `docker compose down -v` (deletes the database, the uploaded bytes and the generated sign-in secret).
 * **Worker stuck or killed:** `docker compose restart worker`.
 * **After pulling changes:** `docker compose up --build`.
+* **Demo content:** see [Demo data](#demo-data).
 
 Limits: the first build takes several minutes, and transcoding speed depends on your machine. Media and share links use `localhost`, so they only work on the same machine. This is not for production: no TLS, no backups, and bytes stay on disk instead of S3.
+
+## Demo data
+The seed fills a fresh run with demo content, so the home page is not empty. It creates demo Users (`demo-user-N`), Videos (generated 8-second clips, processed by the worker like a real upload; one in six is Unlisted, the rest Public), Comments with Replies, Likes and Dislikes, and a ring of Subscriptions. It waits until every Video is ready (5 minute limit) and is safe to run again: it only adds what is missing.
+
+| Flag | Range | Default |
+| --- | --- | --- |
+| `--users N` | 1 to 10 | 3 |
+| `--videos N` | 1 to 50 | 6 |
+| `--comments-per-video N` | 0 to 10 | 2 |
+
+`--help` prints the same. The demo Users sign in with their email `demo-user-N@seed.streamsouk.local` (for example `demo-user-1@seed.streamsouk.local`) and the password `demo-password`, which is known to everyone, so use it on a local run only. The seed refuses to run under `NODE_ENV=production` or with `S3_BUCKET` set.
+
+* **Docker** (the stack is up, so the worker is running):
+  ```sh
+  docker compose run --rm api ./node_modules/.bin/tsx src/seed.ts --users 5 --videos 12
+  ```
+  Leave the flags out for the defaults. Then open **http://localhost:3001**; Videos appear on the home page as they finish processing.
+* **Manual** (API and worker running): `pnpm --filter server seed --users 5 --videos 12`.
+* **Reset:** `docker compose down -v` deletes everything, the demo data included.
 
 ## Run it manually
 This is the source of truth for running StreamSouk from a clone. You run a Postgres database and four processes: the API, the background worker, the upload server (`tusd`) and the web app.
@@ -107,7 +127,7 @@ One terminal each, from the repo root:
 3. Open **Studio**. The Video shows *Processing* with a progress bar, then *Ready* after the worker has made the HLS Renditions and the thumbnail (seconds for a short clip).
 4. In Studio choose **Edit**, give it a title and a description, set Visibility to Public and save. **Watch** plays it, and it appears on the home page.
 
-Want demo content instead? With the worker running, `pnpm --filter server seed` (optionally `--users N --videos N --comments-per-video N`) adds demo Users, Videos, Comments with Replies, Likes and Dislikes, and a ring of Subscriptions (waiting out rate limits when needed); it waits until every Video is ready (5 minute limit) and is safe to run again.
+Want demo content instead? See [Demo data](#demo-data).
 
 If the Video stays on *Processing*, look at the worker terminal. `curl http://localhost:3000/api/v1/videos` returning `{"videos":[],...}` confirms the API and the database.
 

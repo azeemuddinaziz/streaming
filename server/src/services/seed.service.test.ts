@@ -6,7 +6,7 @@ import { ReactionService } from "./reactions.service.ts";
 import { VideoService } from "./videos.service.ts";
 import { UserRepository } from "../repositories/users.repository.ts";
 import { resetDatabase } from "../test/helpers.ts";
-import { checkSeedEnvironment, parseSeedArgs, runSeed, SeedError } from "./seed.service.ts";
+import { checkSeedEnvironment, parseSeedArgs, runSeed, SeedError, seedHelp } from "./seed.service.ts";
 
 beforeEach(async () => {
   await resetDatabase();
@@ -35,6 +35,16 @@ function fakeClock() {
   let t = 0;
   return { now: () => t, sleep: async (ms: number) => void (t += ms) };
 }
+
+describe("seedHelp", () => {
+  it("lists every flag with its range and default", () => {
+    const help = seedHelp();
+    expect(help).toContain("--users N               demo Users (1 to 10, default 3)");
+    expect(help).toContain("--videos N              demo Videos (1 to 50, default 6)");
+    expect(help).toContain("(0 to 10, default 2)");
+    expect(help).toContain("docker compose run --rm api");
+  });
+});
 
 describe("parseSeedArgs", () => {
   it("defaults to 3 Users and 6 Videos", () => {
