@@ -152,7 +152,12 @@ describe("the worker's line for discarding", () => {
       ),
     ).rejects.toThrow();
 
-    expect(lines.find((l) => l.event === "uploads.discarded")).toMatchObject({ found: 2, discarded: 1, failed: 1 });
+    expect(lines.find((l) => l.event === "uploads.discarded")).toMatchObject({
+      found: 2,
+      discarded: 1,
+      failed: 1,
+      error: { message: "tusd answered 500 when removing upload :redacted." },
+    });
     expect(JSON.stringify(lines)).not.toMatch(/tus-id/);
   });
 
@@ -162,4 +167,3 @@ describe("the worker's line for discarding", () => {
     expect(lines.find((l) => l.event === "uploads.discarded")).toMatchObject({ found: 0, discarded: 0, failed: 0 });
   });
 });
-

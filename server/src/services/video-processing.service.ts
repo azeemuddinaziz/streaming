@@ -4,13 +4,7 @@ import path from "node:path";
 import { VideoRepository } from "../repositories/videos.repository.ts";
 import type { Transcoder } from "../lib/ffmpeg.ts";
 import type { Storage } from "../lib/storage.ts";
-import { ExpectedJobError, enrichJob, jobLog, redactInJob } from "../lib/worker-log.ts";
-
-// The file could not be encoded (not a video, unreadable). Expected, so the
-// worker logs it without a stack.
-export class TranscodeError extends ExpectedJobError {
-  name = "TranscodeError";
-}
+import { enrichJob, jobLog, redactInJob } from "../lib/worker-log.ts";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
@@ -30,15 +24,16 @@ const WRITE_EVERY_MS = 2000;
 // The worker logs the progress written each time it crosses a multiple of this.
 const LOG_EVERY_POINTS = 10;
 
-// Writes progress to the Video, throttled. Writes are chained so they land in
-// order, and a failed one is dropped: the bar is cosmetic and must never fail
+// Writes progress to the Video, throttled, and tells the worker's terminal each
+// time it passes a multiple of LOG_EVERY_POINTS. Writes are chained so they land
+// in order, and a failed one is dropped: the bar is cosmetic and must never fail
 // a job. Nothing is written until the transcoder has reported once (`start`),
 // so a source whose length is unknown stays null instead of showing a guess.
 function progressWriter(videoId: string, now: () => number) {
   let started = false;
   let written = -Infinity;
   let writtenAt = 0;
-  let logged = 0;
+  let loggedStep = 0;
   let chain: Promise<void> = Promise.resolve();
   return {
     start() {
@@ -53,8 +48,8 @@ function progressWriter(videoId: string, now: () => number) {
       written = value;
       writtenAt = now();
       const step = Math.floor(value / LOG_EVERY_POINTS) * LOG_EVERY_POINTS;
-      if (step > logged) {
-        logged = step;
+      if (step > loggedStep) {
+        loggedStep = step;
         jobLog("video.progress", { progress: step });
       }
       chain = chain.then(() => VideoRepository.setProgress(videoId, value)).catch(() => undefined);
@@ -64,6 +59,17 @@ function progressWriter(videoId: string, now: () => number) {
 }
 
 export const VideoProcessingService = {
+  // One attempt of the process-video job. A failure is rethrown so the job runner
+  // retries it; once no retry follows (`final`) the Video is marked failed first.
+  async attempt(videoId: string, { final }: { final: boolean }, storage: Storage, transcode: Transcoder) {
+    try {
+      await VideoProcessingService.process(videoId, storage, transcode);
+    } catch (error) {
+      if (final) await VideoProcessingService.fail(videoId);
+      throw error;
+    }
+  },
+
   // Turns a processing Video into HLS Renditions and a Thumbnail stored beside
   // the original, then marks it ready. The original is only read. Throws if
   // anything fails, leaving the Video processing so the job can be retried;
@@ -76,8 +82,9 @@ export const VideoProcessingService = {
       return;
     }
     if (!video.upload) throw new Error(`Video ${videoId} has no Upload to process.`);
-    // The tusd id is a capability; a storage error can name it.
-    redactInJob(video.upload.tusId);
+    // The tusd id is a capability and a storage error can name it, or the part
+    // before "+" that the S3 store keeps the bytes under.
+    redactInJob(video.upload.tusId, ...video.upload.tusId.split("+"));
 
     const progress = progressWriter(videoId, now);
     const workDir = await mkdtemp(path.join(tmpdir(), "streamsouk-"));
@@ -87,20 +94,15 @@ export const VideoProcessingService = {
       jobLog("video.phase", { phase: "downloading" });
       await storage.downloadOriginal(video.upload.tusId, original);
       jobLog("video.phase", { phase: "transcoding" });
-      let result;
-      try {
-        result = await transcode(
-          original,
-          output,
-          (percent) => {
-            progress.start();
-            progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT);
-          },
-          (rendition) => jobLog("video.rendition", { rendition }),
-        );
-      } catch (error) {
-        throw new TranscodeError(error instanceof Error ? error.message : String(error), { cause: error });
-      }
+      const result = await transcode(
+        original,
+        output,
+        (percent) => {
+          progress.start();
+          progress.report(DOWNLOAD_WEIGHT + (percent / 100) * TRANSCODE_WEIGHT);
+        },
+        (rendition) => jobLog("video.rendition", { rendition }),
+      );
 
       const prefix = `videos/${videoId}/`;
       const base = DOWNLOAD_WEIGHT + TRANSCODE_WEIGHT;

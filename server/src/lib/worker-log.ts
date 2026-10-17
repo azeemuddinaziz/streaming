@@ -19,7 +19,12 @@ export type JobAttemptInfo = {
 
 // A failure the job foresees (a file that is not a video), logged without a
 // stack. Anything else is unexpected and keeps its stack.
-export class ExpectedJobError extends Error {}
+export class ExpectedJobError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "ExpectedJobError";
+  }
+}
 
 type JobContext = {
   fields: WorkerLine;
@@ -29,8 +34,10 @@ type JobContext = {
 
 const store = new AsyncLocalStorage<JobContext>();
 
-// Longest error message kept; ffmpeg's stderr can run long.
-const MESSAGE_MAX = 1000;
+// A long error message keeps its start and its end (ffmpeg gives its reason
+// last), up to this many characters of each.
+const MESSAGE_HEAD = 300;
+const MESSAGE_TAIL = 700;
 
 // "HH:MM:SS event key=value ...", in local time, for reading in a terminal.
 export function formatPretty(line: WorkerLine) {
@@ -70,7 +77,8 @@ function redact(line: WorkerLine, secrets: string[]): WorkerLine {
   return JSON.parse(text);
 }
 
-// Writes a line for the worker as a whole (startup, shutdown). Never throws.
+// Writes a line. Inside a job it also carries the job's fields and hides its
+// redacted values. Never throws.
 export function workerLog(event: string, fields: WorkerLine = {}) {
   try {
     const context = store.getStore();
@@ -105,22 +113,40 @@ export function enrichJob(fields: WorkerLine) {
   }
 }
 
-// Keeps a value (a tusd id, a capability) out of every later line of the
+// Keeps values (a tusd id, a capability) out of every later line of the
 // current job, including the message and stack of the error that ends it.
-export function redactInJob(secret: string) {
-  const context = store.getStore();
-  if (context && secret) context.secrets.push(secret);
+export function redactInJob(...secrets: string[]) {
+  try {
+    const context = store.getStore();
+    if (context) context.secrets.push(...secrets.filter(Boolean));
+  } catch {
+    // Never throws.
+  }
 }
 
-function describeError(error: unknown) {
-  const expected = error instanceof ExpectedJobError;
-  const message = (error instanceof Error ? error.message : String(error)).slice(0, MESSAGE_MAX);
-  return {
-    type: errorType(error),
-    message,
-    expected,
-    ...(!expected && error instanceof Error && error.stack ? { stack: error.stack } : {}),
-  };
+function shorten(message: string) {
+  if (message.length <= MESSAGE_HEAD + MESSAGE_TAIL) return message;
+  return `${message.slice(0, MESSAGE_HEAD)} … ${message.slice(-MESSAGE_TAIL)}`;
+}
+
+// `{ type, message, expected, stack? }`, as the API's wide events. pg-boss
+// passes some of its errors on as plain objects, so any object's message and
+// stack are read. Never throws, whatever was thrown.
+export function describeError(error: unknown) {
+  try {
+    const expected = error instanceof ExpectedJobError;
+    const fields: { name?: unknown; message?: unknown; stack?: unknown } =
+      typeof error === "object" && error !== null ? error : {};
+    const hasMessage = typeof fields.message === "string";
+    return {
+      type: typeof fields.name === "string" ? fields.name : hasMessage ? "Error" : errorType(error),
+      message: shorten(hasMessage ? (fields.message as string) : String(error)),
+      expected,
+      ...(!expected && typeof fields.stack === "string" ? { stack: fields.stack } : {}),
+    };
+  } catch {
+    return { type: "Unreadable", message: "The error could not be read.", expected: false };
+  }
 }
 
 // Runs one attempt of a job between a start line and an end line. The end line
@@ -146,7 +172,7 @@ export async function runJob(info: JobAttemptInfo, run: () => Promise<void>) {
   });
 }
 
-// For a worker-level failure outside any job (the job runner's own errors).
+// A line about a failure, such as the job runner's own errors.
 export function workerError(event: string, error: unknown) {
   workerLog(event, { error: describeError(error) });
 }

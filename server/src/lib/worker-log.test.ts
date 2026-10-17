@@ -7,6 +7,7 @@ import {
   redactInJob,
   runJob,
   setWorkerEmit,
+  workerError,
   workerLog,
   type WorkerLine,
 } from "./worker-log.ts";
@@ -122,6 +123,49 @@ describe("runJob", () => {
     });
 
     expect(ran).toBe(true);
+  });
+});
+
+describe("describing an error", () => {
+  it("reads the message and stack of an error pg-boss passes on as a plain object", () => {
+    const cause = new Error("connection terminated (Queue: process-video, Worker: w1)");
+    workerError("worker.error", { ...cause, message: cause.message, stack: cause.stack, queue: "process-video" });
+
+    expect(lines[0]!.error).toEqual({
+      type: "Error",
+      message: "connection terminated (Queue: process-video, Worker: w1)",
+      expected: false,
+      stack: cause.stack,
+    });
+  });
+
+  it("keeps the start and the end of a long message, since ffmpeg gives its reason last", async () => {
+    await expect(
+      runJob(attempt, async () => {
+        throw new Error(`Command failed: ffmpeg${" -x".repeat(1000)}\nInvalid data found when processing input`);
+      }),
+    ).rejects.toThrow();
+
+    const { message } = lines.at(-1)!.error as { message: string };
+    expect(message.startsWith("Command failed: ffmpeg")).toBe(true);
+    expect(message.endsWith("Invalid data found when processing input")).toBe(true);
+    expect(message.length).toBeLessThanOrEqual(1003);
+  });
+
+  it("still ends the job, with the same error, when the thrown value cannot be read", async () => {
+    const unreadable = Object.create(null);
+
+    await expect(
+      runJob(attempt, async () => {
+        throw unreadable;
+      }),
+    ).rejects.toBe(unreadable);
+
+    expect(lines.at(-1)).toMatchObject({
+      event: "job.ended",
+      outcome: "retrying",
+      error: { type: "Unreadable", expected: false },
+    });
   });
 });
 

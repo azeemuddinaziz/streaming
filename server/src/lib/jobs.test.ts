@@ -103,14 +103,21 @@ describe("job runner", () => {
     expect(state).toBe("completed");
   });
 
-  it("names the registered jobs and their schedules", async () => {
-    const jobs = await start();
-    await jobs.register("test-a", async () => {});
-    await jobs.register("test-b", async () => {}, { schedule: "0 * * * *" });
+  it("says the worker is up, naming its jobs, before a job already waiting writes a line", async () => {
+    const lines: WorkerLine[] = [];
+    setWorkerEmit((line) => lines.push(line));
+    const producer = createJobRunner({ retryLimit: 2, retryDelaySeconds: 1 });
+    await producer.start({ work: false });
+    const id = await producer.enqueue("test-startup", {});
+    await producer.stop();
 
-    expect(jobs.registered()).toEqual([
-      { name: "test-a", schedule: null },
-      { name: "test-b", schedule: "0 * * * *" },
-    ]);
+    const jobs = await start();
+    await jobs.register("test-startup", async () => {});
+    await jobs.start();
+    await waitFor(() => jobs.status("test-startup", id), (s) => s === "completed");
+
+    const up = lines.findIndex((l) => l.event === "worker.started");
+    expect(lines[up]).toMatchObject({ jobs: [{ name: "test-startup", schedule: null }] });
+    expect(up).toBeLessThan(lines.findIndex((l) => l.event === "job.started" && l.jobId === id));
   });
 });

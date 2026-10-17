@@ -5,8 +5,8 @@ import { workerError, workerLog } from "./lib/worker-log.ts";
 
 const jobs = createJobRunner();
 await registerJobs(jobs);
+// The job runner writes the worker.started line once it is connected.
 await jobs.start();
-workerLog("worker.started", { jobs: jobs.registered() });
 
 let stopping = false;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

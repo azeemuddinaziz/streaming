@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Transcoder } from "../lib/ffmpeg.ts";
+import { TranscodeError, type Transcoder } from "../lib/ffmpeg.ts";
 import { runJob, setWorkerEmit, type WorkerLine } from "../lib/worker-log.ts";
 import type { Storage } from "../lib/storage.ts";
 import { prisma } from "../lib/prisma.ts";
@@ -243,7 +243,9 @@ describe("worker lines while processing", () => {
   it("shows the phases, each Rendition and coarse progress, never one line per tick", async () => {
     const video = await newVideo();
 
-    await runJob(attempt, () => VideoProcessingService.process(video.id, fakeStorage().storage, realistic));
+    await runJob(attempt, () =>
+      VideoProcessingService.attempt(video.id, { final: false }, fakeStorage().storage, realistic),
+    );
 
     const shown = lines.map((l) =>
       l.event === "video.phase" ? `phase:${l.phase}`
@@ -267,11 +269,12 @@ describe("worker lines while processing", () => {
     expect(lines.find((l) => l.phase === "ready")).toMatchObject({ renditions: 2 });
   });
 
-  it("never writes the tusd id, even in an error that names it", async () => {
+  it("never writes the tusd id or the part of it storage uses, even in an error that names them", async () => {
     const video = await newVideo();
     const { storage } = fakeStorage();
+    // Storage addresses the bytes by the part before "+", as the S3 store does.
     storage.downloadOriginal = async (tusId) => {
-      throw new Error(`ENOENT: no such file or directory, open 'data/uploads/${tusId}'`);
+      throw new Error(`AccessDenied on 'uploads/${tusId.split("+")[0]}' for upload ${tusId}`);
     };
 
     await expect(
@@ -280,25 +283,24 @@ describe("worker lines while processing", () => {
 
     const text = JSON.stringify(lines);
     expect(text).not.toContain("orig+multipart");
+    expect(text).not.toContain("uploads/orig'");
+    expect(text).not.toContain("multipart");
     expect(lines.at(-1)).toMatchObject({ outcome: "retrying", error: { expected: false } });
   });
 
   it("logs a file that cannot be transcoded as an expected failure, and the Video marked failed", async () => {
     const video = await newVideo();
     const notAVideo: Transcoder = async () => {
-      throw new Error("The file has no video stream.");
+      throw new TranscodeError("The file has no video stream.");
     };
 
     await expect(
-      runJob({ ...attempt, attempt: 4, final: true }, async () => {
-        try {
-          await VideoProcessingService.process(video.id, fakeStorage().storage, notAVideo);
-        } catch (error) {
-          await VideoProcessingService.fail(video.id);
-          throw error;
-        }
-      }),
+      runJob({ ...attempt, attempt: 4, final: true }, () =>
+        VideoProcessingService.attempt(video.id, { final: true }, fakeStorage().storage, notAVideo),
+      ),
     ).rejects.toThrow("The file has no video stream.");
+
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).status).toBe("FAILED");
 
     expect(lines.map((l) => l.event)).toContain("video.failed");
     expect(lines.at(-1)).toEqual(expect.objectContaining({
@@ -306,6 +308,21 @@ describe("worker lines while processing", () => {
       final: true,
       error: { type: "TranscodeError", message: "The file has no video stream.", expected: true },
     }));
+  });
+
+  it("logs a failure that is not the file's fault (ffmpeg missing) as unexpected, and retries it", async () => {
+    const video = await newVideo();
+    const noFfmpeg: Transcoder = async () => {
+      throw Object.assign(new Error("spawn ffprobe ENOENT"), { code: "ENOENT" });
+    };
+
+    await expect(
+      runJob(attempt, () => VideoProcessingService.attempt(video.id, { final: false }, fakeStorage().storage, noFfmpeg)),
+    ).rejects.toThrow("spawn ffprobe ENOENT");
+
+    expect(lines.at(-1)).toMatchObject({ outcome: "retrying", error: { type: "Error", expected: false } });
+    expect((lines.at(-1)!.error as { stack?: string }).stack).toContain("spawn ffprobe ENOENT");
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).status).toBe("PROCESSING");
   });
 
   it("says why it skipped a Video that is no longer processing", async () => {
@@ -317,4 +334,3 @@ describe("worker lines while processing", () => {
     expect(lines.find((l) => l.event === "video.skipped")).toMatchObject({ reason: "FAILED" });
   });
 });
-
