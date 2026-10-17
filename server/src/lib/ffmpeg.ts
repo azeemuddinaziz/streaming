@@ -2,17 +2,39 @@ import { execFile, spawn } from "node:child_process";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { ExpectedJobError } from "./worker-log.ts";
 
 const exec = promisify(execFile);
 // A hung ffmpeg must throw inside the job, so the Video can still be marked failed.
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const run = (command: string, args: string[]) => exec(command, args, { timeout: COMMAND_TIMEOUT_MS });
+// Errors only: no banner and no dump of the input, so a failure's message is its
+// reason and never text embedded in the file (title, comment, location tags).
+const QUIET = ["-hide_banner", "-v", "error"];
+
+// ffmpeg or ffprobe ran and could not use the file (not a video, unreadable,
+// or a non-zero exit while encoding it). The worker logs it as expected; a
+// missing binary or a timeout is not the file's fault and is not this.
+export class TranscodeError extends ExpectedJobError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "TranscodeError";
+  }
+}
+
+// A command that ran and exited non-zero rejected the file. Anything else
+// (ENOENT for a missing binary, a kill on timeout) is passed on as it is.
+function blameFile(error: unknown) {
+  return typeof (error as { code?: unknown }).code === "number"
+    ? new TranscodeError((error as Error).message, { cause: error })
+    : error;
+}
 
 // Runs ffmpeg with `-progress pipe:1` and reports how far into the output it
 // is, in seconds, each time it says so. Rejects on a non-zero exit or timeout.
 function runFfmpeg(args: string[], onTime?: (seconds: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn("ffmpeg", ["-nostats", "-progress", "pipe:1", ...args], {
+    const child = spawn("ffmpeg", [...QUIET, "-nostats", "-progress", "pipe:1", ...args], {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: COMMAND_TIMEOUT_MS,
     });
@@ -34,7 +56,8 @@ function runFfmpeg(args: string[], onTime?: (seconds: number) => void): Promise<
     child.on("error", reject);
     child.on("close", (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg ${signal ? `was stopped by ${signal}` : `exited with ${code}`}: ${stderr.trim()}`));
+      else if (signal) reject(new Error(`ffmpeg was stopped by ${signal}: ${stderr.trim()}`));
+      else reject(new TranscodeError(`ffmpeg exited with ${code}: ${stderr.trim()}`));
     });
   });
 }
@@ -64,11 +87,13 @@ export type Transcoded = {
 };
 
 // `onProgress` gets the percent done (0 to 100, rising) of the whole transcode.
-// It is never called when the source's duration is unknown.
+// It is never called when the source's duration is unknown. `onRendition` gets
+// each Rendition's name ("720p") once it is encoded.
 export type Transcoder = (
   input: string,
   outputDir: string,
   onProgress?: (percent: number) => void,
+  onRendition?: (name: string) => void,
 ) => Promise<Transcoded>;
 
 // Heights to encode, tallest first, with the video bitrate (kbit/s) of each.
@@ -102,16 +127,18 @@ async function probe(input: string) {
     "-show_entries", "stream=width,height",
     "-of", "json",
     input,
-  ]);
+  ]).catch((error: unknown) => {
+    throw blameFile(error);
+  });
   const stream = JSON.parse(stdout).streams?.[0] as { width: number; height: number } | undefined;
-  if (!stream?.width || !stream.height) throw new Error("The file has no video stream.");
+  if (!stream?.width || !stream.height) throw new TranscodeError("The file has no video stream.");
   return stream;
 }
 
 // Cuts the file into HLS Renditions (video and audio together), a master
-// playlist listing them, and a JPEG of the first frame. Throws when ffmpeg
-// cannot read the file.
-export const transcode: Transcoder = async (input, outputDir, onProgress) => {
+// playlist listing them, and a JPEG of the first frame. Throws a TranscodeError
+// when ffmpeg cannot use the file.
+export const transcode: Transcoder = async (input, outputDir, onProgress, onRendition) => {
   const source = await probe(input);
   const duration = await probeDuration(input);
 
@@ -160,10 +187,14 @@ export const transcode: Transcoder = async (input, outputDir, onProgress) => {
       bandwidth: (step.videoKbps + AUDIO_KBPS) * 1000,
       playlist: `${dir}/index.m3u8`,
     });
+    onRendition?.(dir);
   }
 
   const thumbnail = "thumbnail.jpg";
-  await run("ffmpeg", ["-y", "-i", input, "-frames:v", "1", "-q:v", "2", path.join(outputDir, thumbnail)]);
+  await run("ffmpeg", [...QUIET, "-y", "-i", input, "-frames:v", "1", "-q:v", "2", path.join(outputDir, thumbnail)])
+    .catch((error: unknown) => {
+      throw blameFile(error);
+    });
   report(steps);
 
   const masterPlaylist = "master.m3u8";

@@ -124,11 +124,13 @@ export class VideoRepository {
     });
   }
 
+  // True when the Video was processing and is now failed.
   static async markFailed(videoId: string) {
-    await prisma.video.updateMany({
+    const claimed = await prisma.video.updateMany({
       where: { id: videoId, status: "PROCESSING" },
       data: { status: "FAILED" },
     });
+    return claimed.count === 1;
   }
 
   static async findOwned(videoId: string, userId: string) {

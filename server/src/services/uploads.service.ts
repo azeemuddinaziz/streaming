@@ -1,4 +1,5 @@
 import { UploadRepository } from "../repositories/uploads.repository.ts";
+import { describeError, jobLog, redactInJob } from "../lib/worker-log.ts";
 
 // An Upload still unfinished this long after it started is discarded.
 const UNFINISHED_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -33,16 +34,29 @@ export const UploadService = {
     );
 
     const failed: string[] = [];
+    let discarded = 0;
+    let firstError: unknown;
     for (const upload of stale) {
       if (!(await UploadRepository.claimForDiscard(upload.id))) continue;
 
+      // The tusd id is a capability, and a removal error names it.
+      redactInJob(upload.tusId);
       try {
         await removeBytes(upload.tusId);
+        discarded += 1;
       } catch (error) {
         await UploadRepository.releaseDiscardClaim(upload.id);
         failed.push(upload.id);
+        firstError ??= error;
       }
     }
+    jobLog("uploads.discarded", {
+      found: stale.length,
+      discarded,
+      failed: failed.length,
+      // Why the first removal failed; they usually fail together (tusd down).
+      ...(failed.length > 0 ? { error: describeError(firstError) } : {}),
+    });
 
     if (failed.length > 0) {
       // The job runner keeps this message with the failed job.

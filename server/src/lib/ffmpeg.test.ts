@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { stepProgress, transcode } from "./ffmpeg.ts";
+import { stepProgress, transcode, TranscodeError } from "./ffmpeg.ts";
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const dir = mkdtempSync(path.join(tmpdir(), "ffmpeg-test-"));
@@ -41,12 +41,29 @@ describe("stepProgress", () => {
   });
 });
 
+describe("transcode failures", () => {
+  it("does not blame the file when ffmpeg cannot be started", async () => {
+    const file = path.join(dir, "any.mp4");
+    execFileSync("sh", ["-c", `echo bytes > ${file}`]);
+    const pathBefore = process.env.PATH;
+    // A PATH with no ffmpeg or ffprobe on it.
+    process.env.PATH = dir;
+    const error = await transcode(file, path.join(dir, "out-none")).catch((e: unknown) => e);
+    process.env.PATH = pathBefore;
+
+    expect(error).not.toBeInstanceOf(TranscodeError);
+    expect((error as { code?: string }).code).toBe("ENOENT");
+  });
+});
+
 describe.skipIf(!hasFfmpeg)("transcode (needs ffmpeg)", () => {
   it("makes several Renditions with audio, a master playlist and a first-frame thumbnail", async () => {
     const out = path.join(dir, "out");
-    const result = await transcode(sample("hd.mp4", "1280x720"), out);
+    const finished: string[] = [];
+    const result = await transcode(sample("hd.mp4", "1280x720"), out, undefined, (name) => finished.push(name));
 
     expect(result.renditions.map((r) => r.height)).toEqual([720, 480, 360]);
+    expect(finished).toEqual(["720p", "480p", "360p"]);
     for (const rendition of result.renditions) {
       expect(streams(path.join(out, rendition.playlist.replace("index.m3u8", "segment_000.ts")), "audio")).toBe(1);
     }
@@ -79,6 +96,6 @@ describe.skipIf(!hasFfmpeg)("transcode (needs ffmpeg)", () => {
     const bad = path.join(dir, "bad.mp4");
     execFileSync("sh", ["-c", `echo nope > ${bad}`]);
 
-    await expect(transcode(bad, path.join(dir, "out-bad"))).rejects.toThrow();
+    await expect(transcode(bad, path.join(dir, "out-bad"))).rejects.toBeInstanceOf(TranscodeError);
   });
 });

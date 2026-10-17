@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createJobRunner, type JobRunner } from "./jobs.ts";
+import { enrichJob, setWorkerEmit, type WorkerLine } from "./worker-log.ts";
 
 async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean) {
   const deadline = Date.now() + 25_000;
@@ -17,6 +18,7 @@ describe("job runner", () => {
   afterEach(async () => {
     await runner?.stop();
     runner = undefined;
+    setWorkerEmit(null);
   });
 
   async function start(options: Parameters<typeof createJobRunner>[0] = {}) {
@@ -62,5 +64,60 @@ describe("job runner", () => {
     const id = await producer.enqueue("test-later", {});
 
     expect(await producer.status("test-later", id)).toBe("created");
+  });
+
+  it("writes a start and an end line for every attempt, the last one marked final and failed", async () => {
+    const lines: WorkerLine[] = [];
+    setWorkerEmit((line) => lines.push(line));
+    const jobs = await start({ retryLimit: 1 });
+    await jobs.register("test-log-fail", async () => {
+      enrichJob({ videoId: "v1" });
+      throw new Error("boom");
+    });
+    await jobs.start();
+
+    const id = await jobs.enqueue("test-log-fail", {});
+    await waitFor(() => jobs.status("test-log-fail", id), (s) => s === "failed");
+
+    const ends = lines.filter((l) => l.event === "job.ended" && l.jobId === id);
+    expect(ends).toMatchObject([
+      { job: "test-log-fail", attempt: 1, final: false, outcome: "retrying", videoId: "v1", error: { message: "boom" } },
+      { job: "test-log-fail", attempt: 2, final: true, outcome: "failed", videoId: "v1", error: { message: "boom" } },
+    ]);
+    expect(lines.filter((l) => l.event === "job.started" && l.jobId === id)).toHaveLength(2);
+  }, 30_000);
+
+  it("completes a job even when every log line throws", async () => {
+    setWorkerEmit(() => {
+      throw new Error("stdout closed");
+    });
+    const jobs = await start();
+    await jobs.register("test-log-throws", async () => {
+      enrichJob({ videoId: "v1" });
+    });
+    await jobs.start();
+
+    const id = await jobs.enqueue("test-log-throws", {});
+    const state = await waitFor(() => jobs.status("test-log-throws", id), (s) => s === "completed");
+
+    expect(state).toBe("completed");
+  });
+
+  it("says the worker is up, naming its jobs, before a job already waiting writes a line", async () => {
+    const lines: WorkerLine[] = [];
+    setWorkerEmit((line) => lines.push(line));
+    const producer = createJobRunner({ retryLimit: 2, retryDelaySeconds: 1 });
+    await producer.start({ work: false });
+    const id = await producer.enqueue("test-startup", {});
+    await producer.stop();
+
+    const jobs = await start();
+    await jobs.register("test-startup", async () => {});
+    await jobs.start();
+    await waitFor(() => jobs.status("test-startup", id), (s) => s === "completed");
+
+    const up = lines.findIndex((l) => l.event === "worker.started");
+    expect(lines[up]).toMatchObject({ jobs: [{ name: "test-startup", schedule: null }] });
+    expect(up).toBeLessThan(lines.findIndex((l) => l.event === "job.started" && l.jobId === id));
   });
 });

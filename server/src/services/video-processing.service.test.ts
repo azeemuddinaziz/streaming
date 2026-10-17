@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Transcoder } from "../lib/ffmpeg.ts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { TranscodeError, type Transcoder } from "../lib/ffmpeg.ts";
+import { runJob, setWorkerEmit, type WorkerLine } from "../lib/worker-log.ts";
 import type { Storage } from "../lib/storage.ts";
 import { prisma } from "../lib/prisma.ts";
 import { UploadRepository } from "../repositories/uploads.repository.ts";
@@ -215,5 +216,121 @@ describe("processing a video", () => {
     await VideoProcessingService.process(video.id, storage, transcode);
 
     expect(stored.size).toBe(0);
+  });
+});
+
+describe("worker lines while processing", () => {
+  let lines: WorkerLine[];
+  const attempt = { job: "process-video", jobId: "job-1", attempt: 1, final: false };
+
+  beforeEach(() => {
+    lines = [];
+    setWorkerEmit((line) => lines.push(line));
+  });
+
+  afterEach(() => setWorkerEmit(null));
+
+  // Reports 1000 ticks and finishes each Rendition, as ffmpeg would.
+  const realistic: Transcoder = async (input, outputDir, onProgress, onRendition) => {
+    for (let i = 0; i <= 1000; i++) {
+      onProgress?.(i / 10);
+      if (i === 500) onRendition?.("720p");
+      if (i === 900) onRendition?.("360p");
+    }
+    return transcode(input, outputDir);
+  };
+
+  it("shows the phases, each Rendition and coarse progress, never one line per tick", async () => {
+    const video = await newVideo();
+
+    await runJob(attempt, () =>
+      VideoProcessingService.attempt(video.id, { final: false }, fakeStorage().storage, realistic),
+    );
+
+    const shown = lines.map((l) =>
+      l.event === "video.phase" ? `phase:${l.phase}`
+      : l.event === "video.rendition" ? `rendition:${l.rendition}`
+      : String(l.event),
+    ).filter((name) => name !== "video.progress");
+    expect(shown).toEqual([
+      "job.started",
+      "phase:downloading",
+      "phase:transcoding",
+      "rendition:720p",
+      "rendition:360p",
+      "phase:uploading",
+      "phase:ready",
+      "job.ended",
+    ]);
+    const progress = lines.filter((l) => l.event === "video.progress").map((l) => l.progress);
+    expect(progress).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    // Every line after the start line names the Video, the end line included.
+    expect(lines.slice(1).every((l) => l.videoId === video.id)).toBe(true);
+    expect(lines.find((l) => l.phase === "ready")).toMatchObject({ renditions: 2 });
+  });
+
+  it("never writes the tusd id or the part of it storage uses, even in an error that names them", async () => {
+    const video = await newVideo();
+    const { storage } = fakeStorage();
+    // Storage addresses the bytes by the part before "+", as the S3 store does.
+    storage.downloadOriginal = async (tusId) => {
+      throw new Error(`AccessDenied on 'uploads/${tusId.split("+")[0]}' for upload ${tusId}`);
+    };
+
+    await expect(
+      runJob(attempt, () => VideoProcessingService.process(video.id, storage, realistic)),
+    ).rejects.toThrow();
+
+    const text = JSON.stringify(lines);
+    expect(text).not.toContain("orig+multipart");
+    expect(text).not.toContain("uploads/orig'");
+    expect(text).not.toContain("multipart");
+    expect(lines.at(-1)).toMatchObject({ outcome: "retrying", error: { expected: false } });
+  });
+
+  it("logs a file that cannot be transcoded as an expected failure, and the Video marked failed", async () => {
+    const video = await newVideo();
+    const notAVideo: Transcoder = async () => {
+      throw new TranscodeError("The file has no video stream.");
+    };
+
+    await expect(
+      runJob({ ...attempt, attempt: 4, final: true }, () =>
+        VideoProcessingService.attempt(video.id, { final: true }, fakeStorage().storage, notAVideo),
+      ),
+    ).rejects.toThrow("The file has no video stream.");
+
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).status).toBe("FAILED");
+
+    expect(lines.map((l) => l.event)).toContain("video.failed");
+    expect(lines.at(-1)).toEqual(expect.objectContaining({
+      outcome: "failed",
+      final: true,
+      error: { type: "TranscodeError", message: "The file has no video stream.", expected: true },
+    }));
+  });
+
+  it("logs a failure that is not the file's fault (ffmpeg missing) as unexpected, and retries it", async () => {
+    const video = await newVideo();
+    const noFfmpeg: Transcoder = async () => {
+      throw Object.assign(new Error("spawn ffprobe ENOENT"), { code: "ENOENT" });
+    };
+
+    await expect(
+      runJob(attempt, () => VideoProcessingService.attempt(video.id, { final: false }, fakeStorage().storage, noFfmpeg)),
+    ).rejects.toThrow("spawn ffprobe ENOENT");
+
+    expect(lines.at(-1)).toMatchObject({ outcome: "retrying", error: { type: "Error", expected: false } });
+    expect((lines.at(-1)!.error as { stack?: string }).stack).toContain("spawn ffprobe ENOENT");
+    expect((await prisma.video.findUniqueOrThrow({ where: { id: video.id } })).status).toBe("PROCESSING");
+  });
+
+  it("says why it skipped a Video that is no longer processing", async () => {
+    const video = await newVideo();
+    await VideoProcessingService.fail(video.id);
+
+    await runJob(attempt, () => VideoProcessingService.process(video.id, fakeStorage().storage, realistic));
+
+    expect(lines.find((l) => l.event === "video.skipped")).toMatchObject({ reason: "FAILED" });
   });
 });

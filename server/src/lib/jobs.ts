@@ -1,4 +1,5 @@
 import { PgBoss } from "pg-boss";
+import { runJob, workerError, workerLog } from "./worker-log.ts";
 
 export type JobState = "created" | "retry" | "active" | "completed" | "cancelled" | "failed";
 
@@ -42,7 +43,13 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
     queues.add(name);
   }
 
-  boss.on("error", (error) => console.error("Job runner error:", error));
+  // A process that works jobs is the worker and logs as one; one that only
+  // enqueues (the API) keeps a plain error line.
+  let working = false;
+  boss.on("error", (error) => {
+    if (working) workerError("worker.error", error);
+    else console.error("Job runner error:", error);
+  });
 
   return {
     // Declares a job name and the function that runs it. Call before start().
@@ -53,16 +60,28 @@ export function createJobRunner({ retryLimit = 3, retryDelaySeconds = 30 }: JobR
     // Connects to the database. Workers start processing registered jobs;
     // pass { work: false } to only enqueue and read status (the API does this).
     async start({ work = true }: { work?: boolean } = {}) {
+      working = work;
       await boss.start();
-      for (const [name, { handler, schedule }] of handlers) {
+      for (const [name, { schedule }] of handlers) {
         await ensureQueue(name);
-        if (work) {
-          await boss.work<object, void, { includeMetadata: true }>(name, { includeMetadata: true }, async ([job]) => {
-            await handler(job.data, { final: job.retryCount >= job.retryLimit });
-          });
-          // Stored in the database, so starting the worker again updates it.
-          if (schedule) await boss.schedule(name, schedule);
-        }
+        // Stored in the database, so starting the worker again updates it.
+        if (work && schedule) await boss.schedule(name, schedule);
+      }
+      if (!work) return;
+
+      // Written before any handler is attached, so a job already waiting
+      // cannot log its first line ahead of it.
+      workerLog("worker.started", {
+        jobs: [...handlers].map(([name, { schedule }]) => ({ name, schedule: schedule ?? null })),
+      });
+      for (const [name, { handler }] of handlers) {
+        await boss.work<object, void, { includeMetadata: true }>(name, { includeMetadata: true }, async ([job]) => {
+          const final = job.retryCount >= job.retryLimit;
+          // Each attempt is logged from start to end (see worker-log.ts).
+          await runJob({ job: name, jobId: job.id, attempt: job.retryCount + 1, final }, () =>
+            handler(job.data, { final }),
+          );
+        });
       }
     },
 

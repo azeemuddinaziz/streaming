@@ -18,12 +18,7 @@ export async function registerJobs(jobs: JobRunner) {
   // Encodes a new Video into Renditions and a Thumbnail. The job runner retries
   // a failure; once it will not retry again the Video is marked failed.
   const storage = createStorage();
-  jobs.register(PROCESS_VIDEO_JOB, async ({ videoId }: { videoId: string }, { final }) => {
-    try {
-      await VideoProcessingService.process(videoId, storage, transcode);
-    } catch (error) {
-      if (final) await VideoProcessingService.fail(videoId);
-      throw error;
-    }
-  });
+  jobs.register(PROCESS_VIDEO_JOB, ({ videoId }: { videoId: string }, { final }) =>
+    VideoProcessingService.attempt(videoId, { final }, storage, transcode),
+  );
 }

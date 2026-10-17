@@ -43,6 +43,10 @@ info:
     | `process-video` | Queued by the `post-finish` hook, and again by **Studio, Retry processing** | Downloads the original, encodes 6-second HLS Renditions (1080/720/480/360p, up to the source height) with a `master.m3u8`, makes a first-frame thumbnail, then marks the Video `READY`. Reports `Video.processingProgress` (0 to 100, throttled to about every 2 seconds or 2 points) while it runs | Retried 3 times with backoff; after the last attempt the Video is `FAILED` (retry it from the studio) |
     | `discard-stale-uploads` | Hourly (`0 * * * *`, UTC) | Finds Uploads unfinished for over 24 hours, marks them abandoned, asks tusd to delete their bytes. The record stays | The claim is given back and the job fails, so it is retried |
 
+    The worker's terminal shows what it is doing, one JSON line per step (job started,
+    phase, Rendition done, progress every 10 points, job ended with `completed`,
+    `retrying` or `failed`). Set `LOG_FORMAT=pretty` for readable lines when running it locally.
+
 servers:
   - url: "{{baseUrl}}"
     description: The API (default http://localhost:3000/api/v1)
