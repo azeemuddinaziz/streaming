@@ -120,3 +120,23 @@ export function CommentListSkeleton({ count = 3 }: { count?: number }) {
     </LoadingRegion>
   );
 }
+
+// Mirrors SuggestedVideos: a heading over rows of a small Thumbnail beside the text.
+export function SuggestedVideosSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <LoadingRegion label="Loading suggested videos" className="grid gap-3">
+      <Skeleton className="h-6 w-40" aria-hidden="true" />
+      <ul className="grid gap-3" aria-hidden="true">
+        {Array.from({ length: count }, (_, i) => (
+          <li key={i} className="flex gap-3">
+            <Skeleton className="aspect-video w-36 shrink-0 sm:w-40" />
+            <div className="grid flex-1 content-start gap-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </LoadingRegion>
+  );
+}

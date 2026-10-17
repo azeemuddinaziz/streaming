@@ -87,3 +87,7 @@ _Avoid_: Follower, fan
 **Share link**:
 The address of a Video's watch page, or of a Channel's page, that a person copies or hands to the device's share sheet so someone else can open it. It can name a start time within a Video. Sharing leaves no record and has no count: only the link travels, and it grants nothing the Video's Visibility does not already grant, so a private Video's link still opens for its owner alone.
 _Avoid_: Share (as a counted thing), embed, repost
+
+**Suggested videos**:
+The other Videos offered to a Viewer beside the Video they are watching, so they can keep watching. Only Videos the Viewer could open from the home page are offered, never the one being watched. The term says nothing about how they are chosen.
+_Avoid_: Related videos, recommendations (as a name for the list), up next
